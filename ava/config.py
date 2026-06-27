@@ -37,6 +37,11 @@ class Config:
     token: str
     command_prefix: str = "!"
     dev_guild_ids: tuple[int, ...] = field(default_factory=tuple)
+    # DeepSeek (used by the server-builder feature). Optional — the bot runs
+    # fine without it; the build command just reports it's not configured.
+    deepseek_api_key: str = ""
+    deepseek_model: str = "deepseek-reasoner"
+    deepseek_base_url: str = "https://api.deepseek.com"
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -57,4 +62,15 @@ class Config:
             int(part) for part in raw_guilds.replace(",", " ").split() if part.strip()
         )
 
-        return cls(token=token, command_prefix=prefix, dev_guild_ids=guild_ids)
+        deepseek_key = os.getenv("DEEPSEEK_API_KEY", "").strip()
+        deepseek_model = os.getenv("DEEPSEEK_MODEL", "deepseek-reasoner").strip() or "deepseek-reasoner"
+        deepseek_base = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com").strip().rstrip("/")
+
+        return cls(
+            token=token,
+            command_prefix=prefix,
+            dev_guild_ids=guild_ids,
+            deepseek_api_key=deepseek_key,
+            deepseek_model=deepseek_model,
+            deepseek_base_url=deepseek_base or "https://api.deepseek.com",
+        )

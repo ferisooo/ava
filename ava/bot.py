@@ -34,6 +34,7 @@ class AvaBot(commands.Bot):
     async def setup_hook(self) -> None:
         # Load extensions (cogs).
         await self.load_extension("ava.cogs.moderation")
+        await self.load_extension("ava.cogs.builder")
 
         # Sync application (slash) commands. Syncing to specific guilds is
         # instant and ideal for development; a global sync can take up to an
