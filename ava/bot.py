@@ -24,7 +24,9 @@ def _intents() -> discord.Intents:
 class AvaBot(commands.Bot):
     def __init__(self, config: Config) -> None:
         super().__init__(
-            command_prefix=commands.when_mentioned_or(config.command_prefix),
+            # Plain prefix only — mentions are reserved for the natural-language
+            # agent (see ava/cogs/agent.py), not treated as command prefixes.
+            command_prefix=config.command_prefix,
             intents=_intents(),
             help_command=commands.DefaultHelpCommand(),
             description="Ava — a small moderation bot.",
@@ -35,6 +37,7 @@ class AvaBot(commands.Bot):
         # Load extensions (cogs).
         await self.load_extension("ava.cogs.moderation")
         await self.load_extension("ava.cogs.builder")
+        await self.load_extension("ava.cogs.agent")
 
         # Sync application (slash) commands. Syncing to specific guilds is
         # instant and ideal for development; a global sync can take up to an

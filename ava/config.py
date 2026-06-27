@@ -41,6 +41,9 @@ class Config:
     # fine without it; the build command just reports it's not configured.
     deepseek_api_key: str = ""
     deepseek_model: str = "deepseek-reasoner"
+    # The agent (natural-language commands) needs a tool-calling model; the
+    # reasoner doesn't support tools, so it uses deepseek-chat by default.
+    deepseek_agent_model: str = "deepseek-chat"
     deepseek_base_url: str = "https://api.deepseek.com"
 
     @classmethod
@@ -64,6 +67,9 @@ class Config:
 
         deepseek_key = os.getenv("DEEPSEEK_API_KEY", "").strip()
         deepseek_model = os.getenv("DEEPSEEK_MODEL", "deepseek-reasoner").strip() or "deepseek-reasoner"
+        deepseek_agent_model = (
+            os.getenv("DEEPSEEK_AGENT_MODEL", "deepseek-chat").strip() or "deepseek-chat"
+        )
         deepseek_base = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com").strip().rstrip("/")
 
         return cls(
@@ -72,5 +78,6 @@ class Config:
             dev_guild_ids=guild_ids,
             deepseek_api_key=deepseek_key,
             deepseek_model=deepseek_model,
+            deepseek_agent_model=deepseek_agent_model,
             deepseek_base_url=deepseek_base or "https://api.deepseek.com",
         )
