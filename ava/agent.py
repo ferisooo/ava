@@ -47,6 +47,53 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "rename_category",
+            "description": "Rename an existing category in place (e.g. add an emoji "
+            "to a category like 'INFO' -> '📌 INFO'). Use this instead of creating a "
+            "new category when the user wants to change an existing one.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "category": {"type": "string", "description": "Current category name."},
+                    "new_name": {"type": "string", "description": "The new category name."},
+                },
+                "required": ["category", "new_name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "move_channel",
+            "description": "Move an existing channel into a category (or out of one).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "channel": {"type": "string"},
+                    "category": {"type": "string", "description": "Target category name, or empty for none."},
+                },
+                "required": ["channel"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "delete_channel",
+            "description": "Delete a channel OR a category by name. Only use this when "
+            "the user explicitly asks to delete that specific thing.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Name of the channel or category to delete."}
+                },
+                "required": ["name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "set_channel_topic",
             "description": "Set or change the topic/description of a text channel.",
             "parameters": {
@@ -139,7 +186,11 @@ SYSTEM_PROMPT = """You are Ava, a friendly assistant that manages THIS Discord s
 Current server layout:
 {context}
 
-When the user names a channel, category, or role, match it to the real name above (ignore leading emojis or symbols when matching). Use the tools to carry out the request, then reply with a short, friendly confirmation of what you did. If something is unclear or impossible, say so briefly instead of guessing. You cannot delete things.
+When the user names a channel, category, or role, match it to the real name above (ignore leading emojis or symbols when matching). Use the tools to carry out the request, then reply with a short, friendly confirmation of what you did. If something is unclear or impossible, say so briefly instead of guessing.
+
+Important:
+- To change an EXISTING channel or category, use rename_channel / rename_category — do NOT create a new one.
+- Only delete something when the user explicitly asks to delete that specific thing. Never delete anything that wasn't requested, and never bulk-delete.
 """
 
 
@@ -209,6 +260,32 @@ async def _execute(guild: discord.Guild, name: str, args: dict[str, Any]) -> str
                 return f"No channel matching '{args.get('channel')}'."
             await ch.edit(name=str(args["new_name"])[:100], reason="Ava agent")
             return f"Renamed to '{args['new_name']}'."
+
+        if name == "rename_category":
+            cat = _resolve_category(guild, args.get("category", ""))
+            if cat is None:
+                return f"No category matching '{args.get('category')}'."
+            await cat.edit(name=str(args["new_name"])[:100], reason="Ava agent")
+            return f"Renamed category to '{args['new_name']}'."
+
+        if name == "move_channel":
+            ch = _resolve_channel(guild, args.get("channel", ""))
+            if ch is None or isinstance(ch, discord.CategoryChannel):
+                return f"No movable channel matching '{args.get('channel')}'."
+            cat = _resolve_category(guild, args.get("category"))
+            await ch.edit(category=cat, reason="Ava agent")
+            where = f"into '{cat.name}'" if cat else "out of its category"
+            return f"Moved #{ch.name} {where}."
+
+        if name == "delete_channel":
+            target = _resolve_category(guild, args.get("name", "")) or _resolve_channel(
+                guild, args.get("name", "")
+            )
+            if target is None:
+                return f"Nothing matching '{args.get('name')}'."
+            label = target.name
+            await target.delete(reason="Ava agent")
+            return f"Deleted '{label}'."
 
         if name == "set_channel_topic":
             ch = _resolve_channel(guild, args.get("channel", ""))
