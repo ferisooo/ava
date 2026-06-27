@@ -13,3 +13,6 @@ env/
 .DS_Store
 .idea/
 .vscode/
+
+# Local data (sqlite db, etc.)
+data/
