@@ -187,38 +187,31 @@ class Builder(commands.Cog):
         preset: app_commands.Choice[str] | None = None,
         description: str | None = None,
     ) -> None:
-        # Preset path — instant, no AI call needed.
+        # Resolve what we're designing: a preset theme or a custom description.
         if preset is not None:
-            plan = PRESETS[preset.value]["plan"]
-            embed = _preview_embed(plan, f"{preset.name} preset")
-            view = ConfirmBuild(plan, interaction.user.id)
+            build_prompt = PRESETS[preset.value]["prompt"]
+            label = f"{preset.name} preset"
+        elif description:
+            build_prompt = description
+            label = description
+        else:
             await interaction.response.send_message(
-                content="Here's the layout — review it, then confirm:",
-                embed=embed,
-                view=view,
-            )
-            return
-
-        # Custom path — needs a description and DeepSeek.
-        if not description:
-            await interaction.response.send_message(
-                "Pick a **preset**, or give a **description** for me to design a "
-                "custom server.",
+                "Pick a **preset**, or give a **description** for a custom server.",
                 ephemeral=True,
             )
             return
 
+        # Both paths use DeepSeek to design the layout.
         if not self.bot.config.deepseek_api_key:
             await interaction.response.send_message(
-                "🚫 DeepSeek isn't configured. Add `DEEPSEEK_API_KEY` to the `.env` "
-                "(or use a preset, which needs no AI).",
+                "🚫 DeepSeek isn't configured. Add `DEEPSEEK_API_KEY` to the `.env`.",
                 ephemeral=True,
             )
             return
 
         await interaction.response.defer(thinking=True)
         try:
-            plan = await self._make_plan(description)
+            plan = await self._make_plan(build_prompt)
         except DeepSeekError as exc:
             await interaction.followup.send(f"❌ Couldn't design the server: {exc}")
             return
@@ -230,7 +223,7 @@ class Builder(commands.Cog):
             )
             return
 
-        embed = _preview_embed(plan, description)
+        embed = _preview_embed(plan, label)
         view = ConfirmBuild(plan, interaction.user.id)
         await interaction.followup.send(
             content="Here's what I'll build — review it, then confirm:",
