@@ -11,8 +11,15 @@ from discord import app_commands
 from discord.ext import commands
 
 from ..ai import DeepSeekError, plan_server
+from ..presets import PRESETS
 
 log = logging.getLogger("ava.builder")
+
+# Built from the presets module so the dropdown stays in sync with PRESETS.
+_PRESET_CHOICES = [
+    app_commands.Choice(name=preset["label"], value=key)
+    for key, preset in PRESETS.items()
+]
 
 
 def _preview_embed(plan: dict[str, Any], description: str) -> discord.Embed:
@@ -164,20 +171,47 @@ class Builder(commands.Cog):
 
     @app_commands.command(
         name="build_server",
-        description="Design and build out this server from a description (uses DeepSeek).",
+        description="Build this server from a ready-made preset or a description.",
     )
     @app_commands.describe(
-        description="What is this server for? Describe the topic, vibe, and audience."
+        preset="Pick a ready-made layout (instant, no AI).",
+        description="Or describe a custom server for DeepSeek to design.",
     )
+    @app_commands.choices(preset=_PRESET_CHOICES)
     @app_commands.guild_only()
     @app_commands.checks.has_permissions(administrator=True)
     @app_commands.checks.bot_has_permissions(manage_channels=True, manage_roles=True)
     async def build_server(
-        self, interaction: discord.Interaction, description: str
+        self,
+        interaction: discord.Interaction,
+        preset: app_commands.Choice[str] | None = None,
+        description: str | None = None,
     ) -> None:
+        # Preset path — instant, no AI call needed.
+        if preset is not None:
+            plan = PRESETS[preset.value]["plan"]
+            embed = _preview_embed(plan, f"{preset.name} preset")
+            view = ConfirmBuild(plan, interaction.user.id)
+            await interaction.response.send_message(
+                content="Here's the layout — review it, then confirm:",
+                embed=embed,
+                view=view,
+            )
+            return
+
+        # Custom path — needs a description and DeepSeek.
+        if not description:
+            await interaction.response.send_message(
+                "Pick a **preset**, or give a **description** for me to design a "
+                "custom server.",
+                ephemeral=True,
+            )
+            return
+
         if not self.bot.config.deepseek_api_key:
             await interaction.response.send_message(
-                "🚫 DeepSeek isn't configured. Add `DEEPSEEK_API_KEY` to the `.env`.",
+                "🚫 DeepSeek isn't configured. Add `DEEPSEEK_API_KEY` to the `.env` "
+                "(or use a preset, which needs no AI).",
                 ephemeral=True,
             )
             return
