@@ -191,6 +191,7 @@ When the user names a channel, category, or role, match it to the real name abov
 Important:
 - To change an EXISTING channel or category, use rename_channel / rename_category — do NOT create a new one.
 - Only delete something when the user explicitly asks to delete that specific thing. Never delete anything that wasn't requested, and never bulk-delete.
+- Rename each channel or category at most ONCE per request. Discord blocks renaming the same channel/category more than twice per 10 minutes, so never re-rename the same one to "fix" it.
 """
 
 
@@ -336,6 +337,14 @@ async def _execute(guild: discord.Guild, name: str, args: dict[str, Any]) -> str
         return f"Unknown tool '{name}'."
     except discord.Forbidden:
         return "I don't have permission for that action."
+    except discord.RateLimited as exc:
+        # Discord caps renames at ~2 per 10 min per channel. Report and move on
+        # instead of blocking — the bot is configured to raise rather than wait.
+        return (
+            f"Rate limited by Discord (retry in ~{int(exc.retry_after)}s). "
+            "Renaming the same channel/category more than twice in 10 minutes is "
+            "blocked — skip it for now."
+        )
     except discord.HTTPException as exc:
         return f"Discord rejected that: {exc}"
 

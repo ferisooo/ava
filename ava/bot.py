@@ -28,6 +28,10 @@ class AvaBot(commands.Bot):
             # agent (see ava/cogs/agent.py), not treated as command prefixes.
             command_prefix=config.command_prefix,
             intents=_intents(),
+            # If an action hits a rate limit that would require waiting longer
+            # than this, raise instead of blocking. Channel/category renames are
+            # limited to ~2 per 10 min, which would otherwise hang the bot.
+            max_ratelimit_timeout=60.0,
             help_command=commands.DefaultHelpCommand(),
             description="Ava — a small moderation bot.",
         )

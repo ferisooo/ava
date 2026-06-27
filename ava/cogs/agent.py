@@ -17,6 +17,8 @@ class Agent(commands.Cog):
 
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
+        # Guild IDs with an agent run in progress, so requests don't overlap.
+        self._busy: set[int] = set()
 
     def _strip_mention(self, message: discord.Message) -> str:
         content = message.content
@@ -55,9 +57,17 @@ class Agent(commands.Cog):
             )
             return
 
+        if message.guild.id in self._busy:
+            await message.reply(
+                "⏳ I'm still working on your last request — give me a moment.",
+                mention_author=False,
+            )
+            return
+
         cfg = self.bot.config
-        async with message.channel.typing():
-            try:
+        self._busy.add(message.guild.id)
+        try:
+            async with message.channel.typing():
                 reply = await run_agent(
                     message.guild,
                     request,
@@ -65,11 +75,13 @@ class Agent(commands.Cog):
                     model=cfg.deepseek_agent_model,
                     base_url=cfg.deepseek_base_url,
                 )
-            except AgentError as exc:
-                reply = f"❌ {exc}"
-            except Exception:  # noqa: BLE001 - surface anything else cleanly
-                log.exception("agent run failed")
-                reply = "❌ Something went wrong handling that."
+        except AgentError as exc:
+            reply = f"❌ {exc}"
+        except Exception:  # noqa: BLE001 - surface anything else cleanly
+            log.exception("agent run failed")
+            reply = "❌ Something went wrong handling that."
+        finally:
+            self._busy.discard(message.guild.id)
 
         await message.reply(reply[:2000], mention_author=False)
 
