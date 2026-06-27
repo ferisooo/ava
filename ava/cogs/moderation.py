@@ -87,6 +87,56 @@ class Moderation(commands.Cog):
             await interaction.response.send_message(message, ephemeral=True)
 
     # ------------------------------------------------------------------ #
+    # Bulk purge (anyone's messages) in the current channel
+    # ------------------------------------------------------------------ #
+    @app_commands.command(
+        name="purge",
+        description="Delete the most recent messages in this channel (up to 1000).",
+    )
+    @app_commands.describe(count="How many recent messages to delete (1–1000).")
+    @app_commands.guild_only()
+    @app_commands.checks.has_permissions(manage_messages=True)
+    @app_commands.checks.bot_has_permissions(manage_messages=True, read_message_history=True)
+    async def purge(
+        self,
+        interaction: discord.Interaction,
+        count: app_commands.Range[int, 1, 1000],
+    ) -> None:
+        channel = interaction.channel
+        if not isinstance(channel, (discord.TextChannel, discord.Thread)):
+            await interaction.response.send_message(
+                "🚫 I can only purge in a text channel.", ephemeral=True
+            )
+            return
+
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        deleted = await channel.purge(
+            limit=count, reason=f"/purge by {interaction.user}"
+        )
+        log.info(
+            "purge by %s in #%s: deleted=%d",
+            interaction.user,
+            getattr(channel, "name", channel.id),
+            len(deleted),
+        )
+        note = ""
+        if len(deleted) < count:
+            note = " (some may be older than 14 days, which can't be bulk-deleted)."
+        await interaction.followup.send(
+            f"🧹 Deleted **{len(deleted)}** message(s).{note}", ephemeral=True
+        )
+
+    @purge.error
+    async def purge_error(
+        self, interaction: discord.Interaction, error: app_commands.AppCommandError
+    ) -> None:
+        message = _friendly_error(error)
+        if interaction.response.is_done():
+            await interaction.followup.send(message, ephemeral=True)
+        else:
+            await interaction.response.send_message(message, ephemeral=True)
+
+    # ------------------------------------------------------------------ #
     # Classic prefix command (e.g. "!purgeuser @user 50")
     # ------------------------------------------------------------------ #
     @commands.command(name="purgeuser", aliases=["purge_user"])

@@ -192,6 +192,7 @@ Important:
 - To change an EXISTING channel or category, use rename_channel / rename_category — do NOT create a new one.
 - Only delete something when the user explicitly asks to delete that specific thing. Never delete anything that wasn't requested, and never bulk-delete.
 - Rename each channel or category at most ONCE per request. Discord blocks renaming the same channel/category more than twice per 10 minutes, so never re-rename the same one to "fix" it.
+- "Symbols" and "emojis" are different. If the user asks for SYMBOLS, use plain typographic/Unicode symbol characters such as ✦ ➤ ✧ ◈ ⊹ ★ » │ ╎ ❘ ✿ — NOT colorful emoji. Only use emoji when the user explicitly says "emoji".
 """
 
 
