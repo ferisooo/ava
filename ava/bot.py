@@ -41,6 +41,12 @@ class AvaBot(commands.Bot):
         # Load extensions (cogs).
         await self.load_extension("ava.cogs.moderation")
         await self.load_extension("ava.cogs.automod")
+        await self.load_extension("ava.cogs.security")
+        await self.load_extension("ava.cogs.reactionroles")
+        await self.load_extension("ava.cogs.welcome")
+        await self.load_extension("ava.cogs.sticky")
+        await self.load_extension("ava.cogs.tempvoice")
+        await self.load_extension("ava.cogs.diary")
         await self.load_extension("ava.cogs.builder")
         await self.load_extension("ava.cogs.agent")
 

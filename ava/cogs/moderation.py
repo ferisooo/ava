@@ -58,6 +58,38 @@ def _summary_lines(summary: PurgeSummary) -> str:
     return "\n".join(parts)
 
 
+class _ConfirmNuke(discord.ui.View):
+    def __init__(self, channel: discord.TextChannel, author_id: int) -> None:
+        super().__init__(timeout=30)
+        self.channel = channel
+        self.author_id = author_id
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.author_id:
+            await interaction.response.send_message("Not your command.", ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(label="Nuke it", style=discord.ButtonStyle.danger, emoji="💣")
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        await interaction.response.edit_message(content="💥 Nuking…", view=None)
+        try:
+            new_channel = await self.channel.clone(reason=f"Nuke by {interaction.user}")
+            await new_channel.edit(position=self.channel.position)
+            await self.channel.delete(reason=f"Nuke by {interaction.user}")
+        except discord.HTTPException as exc:
+            await interaction.followup.send(f"❌ Nuke failed: {exc}", ephemeral=True)
+            return
+        try:
+            await new_channel.send("💥 Channel nuked — fresh start!")
+        except discord.HTTPException:
+            pass
+
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        await interaction.response.edit_message(content="Cancelled.", view=None)
+
+
 class Moderation(commands.Cog):
     """Server moderation tools."""
 
@@ -361,6 +393,23 @@ class Moderation(commands.Cog):
             interaction.guild.default_role, send_messages=None, reason=f"Unlock by {interaction.user}"
         )
         await interaction.response.send_message(f"🔓 Unlocked {channel.mention}.")
+
+    @app_commands.command(name="nuke", description="Wipe this channel by cloning it and deleting the old one.")
+    @app_commands.guild_only()
+    @app_commands.checks.has_permissions(manage_channels=True)
+    @app_commands.checks.bot_has_permissions(manage_channels=True)
+    async def nuke(self, interaction: discord.Interaction) -> None:
+        channel = interaction.channel
+        if not isinstance(channel, discord.TextChannel):
+            await interaction.response.send_message("🚫 Not a text channel.", ephemeral=True)
+            return
+        view = _ConfirmNuke(channel, interaction.user.id)
+        await interaction.response.send_message(
+            f"💣 This deletes **all messages** in {channel.mention} by recreating it "
+            "(settings and permissions are kept). Confirm?",
+            view=view,
+            ephemeral=True,
+        )
 
     # ------------------------------------------------------------------ #
     # /warn group + infraction logs

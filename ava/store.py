@@ -83,6 +83,48 @@ def init() -> None:
         conn.execute(
             f"CREATE TABLE IF NOT EXISTS automod (guild_id INTEGER PRIMARY KEY, {automod_cols})"
         )
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS reaction_roles (
+                guild_id INTEGER NOT NULL,
+                message_id INTEGER NOT NULL,
+                emoji TEXT NOT NULL,
+                role_id INTEGER NOT NULL,
+                PRIMARY KEY (message_id, emoji)
+            );
+            CREATE TABLE IF NOT EXISTS welcome (
+                guild_id INTEGER PRIMARY KEY,
+                enabled INTEGER NOT NULL DEFAULT 0,
+                channel_id INTEGER NOT NULL DEFAULT 0,
+                title TEXT NOT NULL DEFAULT 'Welcome!',
+                description TEXT NOT NULL DEFAULT 'Welcome {user} to {server}! You are member #{count}.',
+                color INTEGER NOT NULL DEFAULT 5793266,
+                image_url TEXT NOT NULL DEFAULT ''
+            );
+            CREATE TABLE IF NOT EXISTS stickies (
+                channel_id INTEGER PRIMARY KEY,
+                guild_id INTEGER NOT NULL,
+                content TEXT NOT NULL,
+                last_message_id INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE TABLE IF NOT EXISTS voice_hubs (
+                hub_channel_id INTEGER PRIMARY KEY,
+                guild_id INTEGER NOT NULL,
+                category_id INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE TABLE IF NOT EXISTS temp_voice (
+                channel_id INTEGER PRIMARY KEY,
+                guild_id INTEGER NOT NULL,
+                owner_id INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS diary (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                content TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+            """
+        )
 
 
 def _now_iso() -> str:
@@ -236,3 +278,233 @@ def set_automod(guild_id: int, key: str, value: int) -> None:
             f"INSERT OR REPLACE INTO automod ({columns}) VALUES ({placeholders})",
             [guild_id] + [current[k] for k in keys],
         )
+
+
+# ---- Reaction roles ---------------------------------------------------------
+
+def add_reaction_role(guild_id: int, message_id: int, emoji: str, role_id: int) -> None:
+    with _conn() as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO reaction_roles (guild_id, message_id, emoji, role_id) "
+            "VALUES (?, ?, ?, ?)",
+            (guild_id, message_id, emoji, role_id),
+        )
+
+
+def remove_reaction_role(message_id: int, emoji: str) -> bool:
+    with _conn() as conn:
+        cur = conn.execute(
+            "DELETE FROM reaction_roles WHERE message_id = ? AND emoji = ?",
+            (message_id, emoji),
+        )
+        return cur.rowcount > 0
+
+
+def get_reaction_role(message_id: int, emoji: str) -> Optional[int]:
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT role_id FROM reaction_roles WHERE message_id = ? AND emoji = ?",
+            (message_id, emoji),
+        ).fetchone()
+        return int(row["role_id"]) if row else None
+
+
+def list_reaction_roles(guild_id: int) -> list[dict[str, Any]]:
+    with _conn() as conn:
+        return [
+            dict(r)
+            for r in conn.execute(
+                "SELECT * FROM reaction_roles WHERE guild_id = ?", (guild_id,)
+            ).fetchall()
+        ]
+
+
+# ---- Welcome ----------------------------------------------------------------
+
+WELCOME_DEFAULTS = {
+    "enabled": 0,
+    "channel_id": 0,
+    "title": "Welcome!",
+    "description": "Welcome {user} to {server}! You are member #{count}.",
+    "color": 5793266,
+    "image_url": "",
+}
+
+
+def get_welcome(guild_id: int) -> dict[str, Any]:
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM welcome WHERE guild_id = ?", (guild_id,)
+        ).fetchone()
+    if row is None:
+        return dict(WELCOME_DEFAULTS)
+    return {key: row[key] for key in WELCOME_DEFAULTS}
+
+
+def set_welcome(guild_id: int, **fields: Any) -> None:
+    current = get_welcome(guild_id)
+    current.update({k: v for k, v in fields.items() if k in WELCOME_DEFAULTS})
+    with _conn() as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO welcome "
+            "(guild_id, enabled, channel_id, title, description, color, image_url) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                guild_id,
+                int(current["enabled"]),
+                int(current["channel_id"]),
+                current["title"],
+                current["description"],
+                int(current["color"]),
+                current["image_url"],
+            ),
+        )
+
+
+# ---- Sticky messages --------------------------------------------------------
+
+def set_sticky(channel_id: int, guild_id: int, content: str) -> None:
+    with _conn() as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO stickies (channel_id, guild_id, content, last_message_id) "
+            "VALUES (?, ?, ?, COALESCE((SELECT last_message_id FROM stickies WHERE channel_id = ?), 0))",
+            (channel_id, guild_id, content, channel_id),
+        )
+
+
+def get_sticky(channel_id: int) -> Optional[dict[str, Any]]:
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM stickies WHERE channel_id = ?", (channel_id,)
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def update_sticky_message(channel_id: int, message_id: int) -> None:
+    with _conn() as conn:
+        conn.execute(
+            "UPDATE stickies SET last_message_id = ? WHERE channel_id = ?",
+            (message_id, channel_id),
+        )
+
+
+def remove_sticky(channel_id: int) -> bool:
+    with _conn() as conn:
+        cur = conn.execute("DELETE FROM stickies WHERE channel_id = ?", (channel_id,))
+        return cur.rowcount > 0
+
+
+def list_stickies(guild_id: int) -> list[dict[str, Any]]:
+    with _conn() as conn:
+        return [
+            dict(r)
+            for r in conn.execute(
+                "SELECT * FROM stickies WHERE guild_id = ?", (guild_id,)
+            ).fetchall()
+        ]
+
+
+def sticky_channel_ids() -> set[int]:
+    with _conn() as conn:
+        return {int(r["channel_id"]) for r in conn.execute("SELECT channel_id FROM stickies").fetchall()}
+
+
+# ---- Temp voice -------------------------------------------------------------
+
+def add_voice_hub(hub_channel_id: int, guild_id: int, category_id: int) -> None:
+    with _conn() as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO voice_hubs (hub_channel_id, guild_id, category_id) "
+            "VALUES (?, ?, ?)",
+            (hub_channel_id, guild_id, category_id),
+        )
+
+
+def remove_voice_hub(hub_channel_id: int) -> bool:
+    with _conn() as conn:
+        cur = conn.execute(
+            "DELETE FROM voice_hubs WHERE hub_channel_id = ?", (hub_channel_id,)
+        )
+        return cur.rowcount > 0
+
+
+def get_voice_hub(hub_channel_id: int) -> Optional[dict[str, Any]]:
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM voice_hubs WHERE hub_channel_id = ?", (hub_channel_id,)
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def list_voice_hubs(guild_id: int) -> list[dict[str, Any]]:
+    with _conn() as conn:
+        return [
+            dict(r)
+            for r in conn.execute(
+                "SELECT * FROM voice_hubs WHERE guild_id = ?", (guild_id,)
+            ).fetchall()
+        ]
+
+
+def add_temp_voice(channel_id: int, guild_id: int, owner_id: int) -> None:
+    with _conn() as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO temp_voice (channel_id, guild_id, owner_id) "
+            "VALUES (?, ?, ?)",
+            (channel_id, guild_id, owner_id),
+        )
+
+
+def remove_temp_voice(channel_id: int) -> None:
+    with _conn() as conn:
+        conn.execute("DELETE FROM temp_voice WHERE channel_id = ?", (channel_id,))
+
+
+def get_temp_voice(channel_id: int) -> Optional[dict[str, Any]]:
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM temp_voice WHERE channel_id = ?", (channel_id,)
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def all_temp_voice() -> list[dict[str, Any]]:
+    with _conn() as conn:
+        return [dict(r) for r in conn.execute("SELECT * FROM temp_voice").fetchall()]
+
+
+# ---- Diary ------------------------------------------------------------------
+
+def add_diary(user_id: int, content: str) -> int:
+    with _conn() as conn:
+        cur = conn.execute(
+            "INSERT INTO diary (user_id, content, created_at) VALUES (?, ?, ?)",
+            (user_id, content, _now_iso()),
+        )
+        return int(cur.lastrowid)
+
+
+def list_diary(user_id: int) -> list[dict[str, Any]]:
+    with _conn() as conn:
+        return [
+            dict(r)
+            for r in conn.execute(
+                "SELECT * FROM diary WHERE user_id = ? ORDER BY id DESC", (user_id,)
+            ).fetchall()
+        ]
+
+
+def get_diary(user_id: int, entry_id: int) -> Optional[dict[str, Any]]:
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM diary WHERE user_id = ? AND id = ?", (user_id, entry_id)
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def delete_diary(user_id: int, entry_id: int) -> bool:
+    with _conn() as conn:
+        cur = conn.execute(
+            "DELETE FROM diary WHERE user_id = ? AND id = ?", (user_id, entry_id)
+        )
+        return cur.rowcount > 0
