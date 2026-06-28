@@ -61,9 +61,9 @@ def render_panel(entries: list[dict]) -> str:
         exclusive = any(x["exclusive"] for x in cats[cat])
         tag = "pick one" if exclusive else "pick any"
         lines.append(f"\n**{cat}** · *{tag}*")
-        # All roles in a category on one horizontal line.
-        roles = "   ".join(f"{e['emoji']} <@&{e['role_id']}>" for e in cats[cat])
-        lines.append(roles)
+        # One role per line (vertical list).
+        for e in cats[cat]:
+            lines.append(f"{e['emoji']} <@&{e['role_id']}>")
     return "\n".join(lines)[:2000]
 
 
