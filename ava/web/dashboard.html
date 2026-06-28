@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AVA · Control</title>
+<style>
+  :root{
+    --pink:#ff1493;
+    --pink-bright:#ff5bb0;
+    --pink-deep:#a60c5c;
+    --glow:0 0 6px var(--pink), 0 0 18px var(--pink), 0 0 36px var(--pink-deep);
+    --bg:#000;
+    --panel:rgba(12,2,8,.78);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden;background:var(--bg);color:#fff;
+    font-family:"Segoe UI",system-ui,sans-serif;cursor:none;}
+  a{color:var(--pink-bright)}
+
+  /* layered canvases */
+  #bg,#fx{position:fixed;inset:0;width:100%;height:100%;z-index:0}
+  #fx{z-index:40;pointer-events:none}
+
+  /* custom cursor */
+  #cursor{position:fixed;width:18px;height:18px;border-radius:50%;
+    border:2px solid var(--pink);z-index:60;pointer-events:none;
+    transform:translate(-50%,-50%);transition:width .15s,height .15s,background .15s;
+    box-shadow:var(--glow);mix-blend-mode:screen}
+  #cursor.hot{width:34px;height:34px;background:rgba(255,20,147,.18)}
+
+  /* heading */
+  header{position:fixed;top:0;left:0;right:0;z-index:20;text-align:center;
+    padding:26px 0 0;pointer-events:none}
+  .title{font-size:clamp(34px,7vw,72px);font-weight:800;letter-spacing:.35em;
+    text-indent:.35em;color:#fff;text-shadow:var(--glow);animation:flicker 6s infinite}
+  .subtitle{margin-top:6px;font-size:13px;letter-spacing:.5em;text-indent:.5em;
+    color:var(--pink-bright);opacity:.8;text-shadow:0 0 8px var(--pink-deep)}
+  @keyframes flicker{0%,100%{opacity:1}48%{opacity:1}49%{opacity:.6}50%{opacity:1}
+    92%{opacity:1}93%{opacity:.7}94%{opacity:1}}
+
+  /* stage / wheel */
+  #stage{position:fixed;inset:0;z-index:10;display:flex;align-items:center;
+    justify-content:center}
+  #wheel{position:relative;width:min(78vmin,640px);height:min(78vmin,640px);
+    transition:transform .8s cubic-bezier(.2,.9,.2,1),opacity .6s,filter .6s;
+    animation:spawn 1s cubic-bezier(.2,.9,.2,1) both}
+  #wheel.hidden{transform:scale(.55) rotate(-12deg);opacity:0;filter:blur(8px);
+    pointer-events:none}
+  @keyframes spawn{from{transform:scale(.4) rotate(40deg);opacity:0;filter:blur(14px)}
+    to{transform:scale(1) rotate(0);opacity:1;filter:blur(0)}}
+
+  .ring{position:absolute;inset:0;border-radius:50%;border:1px solid rgba(255,20,147,.18);
+    animation:rot 40s linear infinite}
+  .ring.r2{inset:8%;border-style:dashed;border-color:rgba(255,20,147,.10);
+    animation-duration:60s;animation-direction:reverse}
+  .ring.r3{inset:20%;border-color:rgba(255,91,176,.14);box-shadow:inset 0 0 40px rgba(255,20,147,.12)}
+  @keyframes rot{to{transform:rotate(360deg)}}
+
+  .hub{position:absolute;left:50%;top:50%;width:34%;height:34%;
+    transform:translate(-50%,-50%);border-radius:50%;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;text-align:center;
+    background:radial-gradient(circle at 50% 40%,rgba(255,20,147,.25),rgba(0,0,0,.9) 70%);
+    border:1px solid rgba(255,20,147,.5);box-shadow:var(--glow),inset 0 0 30px rgba(255,20,147,.25);
+    animation:pulse 3.4s ease-in-out infinite}
+  .hub b{font-size:clamp(20px,4vw,34px);letter-spacing:.2em;text-shadow:var(--glow)}
+  .hub span{font-size:10px;letter-spacing:.32em;color:var(--pink-bright);margin-top:4px;opacity:.85}
+  @keyframes pulse{0%,100%{box-shadow:0 0 10px var(--pink),inset 0 0 24px rgba(255,20,147,.18)}
+    50%{box-shadow:0 0 26px var(--pink),0 0 60px var(--pink-deep),inset 0 0 40px rgba(255,20,147,.35)}}
+
+  .node{position:absolute;left:50%;top:50%;width:23%;height:23%;
+    transform:translate(-50%,-50%);border-radius:50%;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;text-align:center;cursor:none;
+    background:radial-gradient(circle at 50% 35%,rgba(40,4,22,.95),rgba(4,0,2,.96));
+    border:1px solid rgba(255,20,147,.35);
+    box-shadow:0 0 0 rgba(255,20,147,0),inset 0 0 18px rgba(255,20,147,.08);
+    transition:transform .35s cubic-bezier(.2,1.3,.3,1),box-shadow .35s,border-color .35s,background .35s}
+  .node .ic{font-size:clamp(20px,3.4vw,30px);filter:drop-shadow(0 0 6px var(--pink));transition:transform .35s}
+  .node .lb{margin-top:6px;font-size:clamp(9px,1.5vw,12px);letter-spacing:.18em;
+    text-transform:uppercase;color:#e7c6d8;transition:color .3s,text-shadow .3s}
+  .node:hover{transform:translate(-50%,-50%) scale(1.22);
+    border-color:var(--pink);background:radial-gradient(circle at 50% 35%,rgba(255,20,147,.4),rgba(8,0,4,.95));
+    box-shadow:var(--glow),inset 0 0 26px rgba(255,20,147,.4);z-index:5}
+  .node:hover .lb{color:#fff;text-shadow:var(--glow)}
+  .node:hover .ic{transform:scale(1.18) rotate(-6deg)}
+  .node::after{content:"";position:absolute;inset:-6px;border-radius:50%;
+    border:1px solid transparent;transition:border-color .3s}
+  .node:hover::after{border-color:rgba(255,20,147,.4);animation:rot 6s linear infinite}
+
+  /* spokes */
+  #spokes{position:absolute;inset:0;z-index:-1;pointer-events:none}
+
+  /* hint */
+  .hint{position:fixed;bottom:22px;left:0;right:0;text-align:center;z-index:20;
+    font-size:11px;letter-spacing:.4em;color:var(--pink-bright);opacity:.55;
+    pointer-events:none;animation:breathe 3s ease-in-out infinite}
+  @keyframes breathe{0%,100%{opacity:.3}50%{opacity:.7}}
+
+  /* panel */
+  #panel{position:fixed;inset:0;z-index:30;display:flex;flex-direction:column;
+    padding:clamp(16px,4vw,48px);opacity:0;pointer-events:none;
+    transition:opacity .5s;background:radial-gradient(circle at 50% 0%,rgba(255,20,147,.06),transparent 60%)}
+  #panel.open{opacity:1;pointer-events:auto}
+  .panel-head{display:flex;align-items:center;gap:18px;margin-bottom:22px;
+    animation:slideDown .5s both}
+  @keyframes slideDown{from{transform:translateY(-30px);opacity:0}to{transform:none;opacity:1}}
+  .back{width:54px;height:54px;border-radius:50%;border:1px solid var(--pink);
+    background:rgba(255,20,147,.08);color:#fff;font-size:22px;cursor:none;
+    box-shadow:var(--glow);transition:transform .3s,background .3s;flex:none}
+  .back:hover{transform:scale(1.12) rotate(-90deg);background:rgba(255,20,147,.3)}
+  .panel-title{font-size:clamp(24px,5vw,46px);font-weight:800;letter-spacing:.18em;
+    text-shadow:var(--glow)}
+  .panel-sub{font-size:12px;letter-spacing:.3em;color:var(--pink-bright);opacity:.8}
+
+  .cards{display:grid;gap:18px;overflow-y:auto;padding:6px 6px 40px;
+    grid-template-columns:repeat(auto-fill,minmax(310px,1fr));scrollbar-width:thin;
+    scrollbar-color:var(--pink) transparent}
+  .cards::-webkit-scrollbar{width:8px}
+  .cards::-webkit-scrollbar-thumb{background:var(--pink-deep);border-radius:8px}
+
+  .card{position:relative;border:1px solid rgba(255,20,147,.28);border-radius:16px;
+    background:var(--panel);backdrop-filter:blur(6px);padding:18px 18px 16px;
+    box-shadow:0 0 0 rgba(255,20,147,0);transition:transform .35s,box-shadow .35s,border-color .35s;
+    animation:cardIn .5s both;overflow:hidden}
+  @keyframes cardIn{from{transform:translateY(24px) scale(.96);opacity:0}to{transform:none;opacity:1}}
+  .card::before{content:"";position:absolute;inset:0;border-radius:16px;padding:1px;
+    background:linear-gradient(120deg,transparent,rgba(255,20,147,.5),transparent);
+    -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+    -webkit-mask-composite:xor;mask-composite:exclude;opacity:0;transition:opacity .4s}
+  .card:hover{transform:translateY(-6px);border-color:var(--pink);
+    box-shadow:var(--glow),0 18px 40px rgba(0,0,0,.6)}
+  .card:hover::before{opacity:1}
+  .cmd{font-family:"Consolas",monospace;font-size:16px;color:#fff;letter-spacing:.04em;
+    text-shadow:0 0 10px var(--pink-deep)}
+  .cmd .slash{color:var(--pink-bright)}
+  .cdesc{font-size:12.5px;color:#caa9bb;margin:6px 0 14px;line-height:1.5}
+
+  .opt{margin:11px 0}
+  .opt label{display:block;font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--pink-bright);margin-bottom:6px;opacity:.85}
+  .opt input[type=text],.opt input[type=number],.opt select{width:100%;
+    background:rgba(0,0,0,.6);border:1px solid rgba(255,20,147,.35);border-radius:9px;
+    color:#fff;padding:9px 12px;font-size:13px;outline:none;transition:border-color .3s,box-shadow .3s}
+  .opt input:focus,.opt select:focus{border-color:var(--pink);box-shadow:var(--glow)}
+  .opt select option{background:#0a0006}
+
+  /* toggle */
+  .sw{position:relative;display:inline-flex;align-items:center;gap:10px;cursor:none}
+  .sw input{display:none}
+  .track{width:46px;height:24px;border-radius:14px;background:rgba(255,255,255,.08);
+    border:1px solid rgba(255,20,147,.4);position:relative;transition:background .3s,box-shadow .3s}
+  .track::after{content:"";position:absolute;top:2px;left:2px;width:18px;height:18px;
+    border-radius:50%;background:#888;transition:transform .3s,background .3s,box-shadow .3s}
+  .sw input:checked + .track{background:rgba(255,20,147,.35);box-shadow:var(--glow)}
+  .sw input:checked + .track::after{transform:translateX(22px);background:#fff;
+    box-shadow:0 0 10px var(--pink)}
+  .sw .txt{font-size:12px;color:#caa9bb}
+
+  /* range */
+  .opt input[type=range]{width:100%;-webkit-appearance:none;height:4px;border-radius:4px;
+    background:linear-gradient(90deg,var(--pink),var(--pink-deep));outline:none}
+  .opt input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;
+    border-radius:50%;background:#fff;box-shadow:var(--glow);cursor:none}
+  .rngval{float:right;color:#fff;font-size:11px;text-shadow:0 0 8px var(--pink)}
+
+  .save{margin-top:14px;width:100%;padding:11px;border-radius:10px;border:1px solid var(--pink);
+    background:linear-gradient(120deg,rgba(255,20,147,.18),rgba(255,20,147,.05));
+    color:#fff;font-size:12px;letter-spacing:.24em;text-transform:uppercase;cursor:none;
+    transition:transform .2s,box-shadow .3s,background .3s}
+  .save:hover{box-shadow:var(--glow);background:rgba(255,20,147,.3);transform:translateY(-2px)}
+  .save:active{transform:scale(.97)}
+  .save.saved{background:var(--pink);color:#0a0006;box-shadow:var(--glow)}
+
+  .toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%) translateY(40px);
+    z-index:70;background:rgba(255,20,147,.92);color:#0a0006;font-weight:700;
+    padding:12px 26px;border-radius:30px;letter-spacing:.1em;box-shadow:var(--glow);
+    opacity:0;transition:opacity .35s,transform .35s;pointer-events:none}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  @media (max-width:560px){.cards{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<canvas id="bg"></canvas>
+<canvas id="fx"></canvas>
+
+<header>
+  <div class="title">AVA</div>
+  <div class="subtitle">CONTROL&nbsp;CORE</div>
+</header>
+
+<div id="stage">
+  <div id="wheel">
+    <div class="ring"></div><div class="ring r2"></div><div class="ring r3"></div>
+    <svg id="spokes" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
+    <div class="hub"><b>AVA</b><span>SELECT</span></div>
+  </div>
+</div>
+
+<div class="hint">HOVER&nbsp;·&nbsp;CLICK&nbsp;A&nbsp;NODE</div>
+
+<div id="panel">
+  <div class="panel-head">
+    <button class="back" id="back">←</button>
+    <div>
+      <div class="panel-title" id="ptitle">—</div>
+      <div class="panel-sub" id="psub">—</div>
+    </div>
+  </div>
+  <div class="cards" id="cards"></div>
+</div>
+
+<div id="cursor"></div>
+<div class="toast" id="toast">SAVED</div>
+
+<script>
+/* ============================ command data ============================ */
+const DATA = {
+  moderation:{name:"Moderation",icon:"⚔",sub:"purge · warn · kick · mute · ban",commands:[
+    {cmd:"/purge all",desc:"Delete recent messages in this channel.",opts:[{t:"range",l:"Count",min:1,max:1000,def:100}]},
+    {cmd:"/purge user",desc:"Delete a specific user's messages.",opts:[{t:"text",l:"User"},{t:"number",l:"Limit per channel"}]},
+    {cmd:"/warn add",desc:"Warn a member (auto-escalates at thresholds).",opts:[{t:"text",l:"Reason"}]},
+    {cmd:"/warn config",desc:"Tune warning thresholds.",opts:[{t:"range",l:"Auto-mute at (warnings)",min:1,max:20,def:3},{t:"range",l:"Mute length (min)",min:1,max:1440,def:60},{t:"range",l:"Auto-kick at (warnings)",min:1,max:20,def:5},{t:"text",l:"Mod-log channel"}]},
+    {cmd:"/kick",desc:"Remove a member.",opts:[{t:"text",l:"Member"},{t:"text",l:"Reason"}]},
+    {cmd:"/mute",desc:"Timeout a member.",opts:[{t:"text",l:"Member"},{t:"text",l:"Duration (10m, 1h, 1d)"},{t:"text",l:"Reason"}]},
+    {cmd:"/tempban",desc:"Ban for a duration, then auto-unban.",opts:[{t:"text",l:"Member"},{t:"text",l:"Duration (1d, 7d)"}]},
+    {cmd:"/slowmode",desc:"Limit how fast members post.",opts:[{t:"range",l:"Seconds",min:0,max:21600,def:0}]},
+    {cmd:"/lock · /unlock",desc:"Stop or allow chatting in a channel.",opts:[{t:"toggle",l:"Locked"}]},
+    {cmd:"/nuke",desc:"Wipe a channel (clone + delete).",opts:[{t:"toggle",l:"Require confirmation",def:true}]},
+    {cmd:"/infractions",desc:"View a member's full record.",opts:[{t:"text",l:"Member"}]},
+  ]},
+  security:{name:"Security",icon:"🛡",sub:"auto-mod · anti-raid",commands:[
+    {cmd:"/security",desc:"Apply a protection preset.",opts:[{t:"select",l:"Level",options:["Easy","Medium","Hard","Strict"],def:"Medium"}]},
+    {cmd:"/automod (filters)",desc:"Message filters.",opts:[{t:"toggle",l:"Block invites",def:true},{t:"toggle",l:"Block mass mentions",def:true},{t:"toggle",l:"Block spam",def:true},{t:"toggle",l:"Block caps",def:true},{t:"range",l:"Mention limit",min:1,max:50,def:5}]},
+    {cmd:"/automod spam",desc:"Spam sensitivity.",opts:[{t:"range",l:"Messages",min:2,max:20,def:5},{t:"range",l:"Within seconds",min:1,max:30,def:5}]},
+    {cmd:"/automod escalate",desc:"Auto-timeout on repeat hits.",opts:[{t:"range",l:"Strikes / 60s",min:1,max:20,def:3},{t:"range",l:"Timeout (min)",min:1,max:1440,def:10}]},
+    {cmd:"/automod raid",desc:"Mass-join protection.",opts:[{t:"toggle",l:"Detect raids",def:true},{t:"range",l:"Joins",min:2,max:100,def:10},{t:"range",l:"Within seconds",min:1,max:600,def:10},{t:"range",l:"Min account age (days)",min:0,max:365,def:0}]},
+  ]},
+  builder:{name:"Builder",icon:"🏗",sub:"AI server designer",commands:[
+    {cmd:"/build_server preset",desc:"Build from a themed preset.",opts:[{t:"select",l:"Preset",options:["Gaming Hub","Study Lounge","Creator Community","Anime Club","Music Den","Movie Night","Roleplay Realm","Tech Support","Art Studio","Fitness Crew","Crypto Corner","Book Club","Friend Hangout","School Server","Business Network","Minecraft SMP","Roblox Squad","Esports Team","Podcast Community","Meme Central"]}]},
+    {cmd:"/build_server custom",desc:"Describe a server for DeepSeek to design.",opts:[{t:"text",l:"Description"}]},
+  ]},
+  engagement:{name:"Engagement",icon:"✦",sub:"welcome · roles · sticky · voice",commands:[
+    {cmd:"/welcome",desc:"Custom welcome embed for new members.",opts:[{t:"toggle",l:"Enabled",def:true},{t:"text",l:"Channel"},{t:"text",l:"Title"},{t:"text",l:"Message ({user} {server} {count})"},{t:"text",l:"Color (#hex)"}]},
+    {cmd:"/reactionrole",desc:"React to get a role.",opts:[{t:"text",l:"Message ID"},{t:"text",l:"Emoji"},{t:"text",l:"Role"}]},
+    {cmd:"/sticky",desc:"Pin a message to the bottom of a channel.",opts:[{t:"text",l:"Sticky text"}]},
+    {cmd:"/tempvoice",desc:"Join-to-create lockable voice channels.",opts:[{t:"text",l:"Hub voice channel"},{t:"text",l:"Category"}]},
+  ]},
+  personal:{name:"Personal",icon:"📓",sub:"private to each user",commands:[
+    {cmd:"/diary write",desc:"Save a private journal entry.",opts:[{t:"text",l:"Entry"}]},
+    {cmd:"/diary list",desc:"List your entries.",opts:[]},
+    {cmd:"/diary read · delete",desc:"Open or remove an entry.",opts:[{t:"number",l:"Entry #"}]},
+  ]},
+  agent:{name:"Agent",icon:"🤖",sub:"talk to Ava in plain English",commands:[
+    {cmd:"@Ava …",desc:"Natural-language server actions (admins).",opts:[{t:"text",l:"Try: add a 🎮 symbol to #general"}]},
+    {cmd:"Model",desc:"DeepSeek powers the agent & builder.",opts:[{t:"select",l:"Agent model",options:["deepseek-chat","deepseek-reasoner"],def:"deepseek-chat"}]},
+  ]},
+};
+const ORDER=["moderation","security","builder","engagement","personal","agent"];
+
+/* ============================ cursor ============================ */
+const cursor=document.getElementById('cursor');
+let mx=innerWidth/2,my=innerHeight/2,cxp=mx,cyp=my;
+addEventListener('mousemove',e=>{mx=e.clientX;my=e.clientY;pushTrail(mx,my)});
+(function follow(){cxp+=(mx-cxp)*.25;cyp+=(my-cyp)*.25;
+  cursor.style.left=cxp+'px';cursor.style.top=cyp+'px';requestAnimationFrame(follow)})();
+document.addEventListener('mouseover',e=>{
+  cursor.classList.toggle('hot',!!e.target.closest('.node,.card,button,input,select,.sw'))});
+
+/* ============================ background canvas ============================ */
+const bg=document.getElementById('bg'),bx=bg.getContext('2d');
+const fx=document.getElementById('fx'),fxc=fx.getContext('2d');
+let W,H;function size(){W=bg.width=fx.width=innerWidth;H=bg.height=fx.height=innerHeight}
+size();addEventListener('resize',size);
+
+const stars=[...Array(90)].map(()=>({x:Math.random(),y:Math.random(),
+  r:Math.random()*1.6+.4,s:Math.random()*.4+.1,p:Math.random()*6.28}));
+function drawBG(t){
+  bx.clearRect(0,0,W,H);
+  // vignette glow
+  const g=bx.createRadialGradient(W/2,H*.5,0,W/2,H*.5,Math.max(W,H)*.7);
+  g.addColorStop(0,'rgba(60,2,30,.45)');g.addColorStop(1,'rgba(0,0,0,0)');
+  bx.fillStyle=g;bx.fillRect(0,0,W,H);
+  // drifting glow particles + links
+  bx.save();
+  for(const s of stars){
+    s.y-=s.s*.0009; if(s.y<-.02)s.y=1.02;
+    const x=s.x*W, y=s.y*H, tw=.5+.5*Math.sin(t*.002+s.p);
+    bx.beginPath();bx.arc(x,y,s.r*(1+tw),0,6.28);
+    bx.fillStyle=`rgba(255,${30+tw*40},${130+tw*60},${.25+tw*.5})`;
+    bx.shadowColor='#ff1493';bx.shadowBlur=10*tw;bx.fill();
+  }
+  bx.restore();
+}
+
+/* trails + ripples on fx layer */
+const trail=[],ripples=[];
+function pushTrail(x,y){trail.push({x,y,a:1,r:Math.random()*3+2})}
+addEventListener('click',e=>{ripples.push({x:e.clientX,y:e.clientY,r:4,a:1});
+  for(let i=0;i<10;i++)trail.push({x:e.clientX,y:e.clientY,a:1,r:Math.random()*4+2,
+    vx:(Math.random()-.5)*6,vy:(Math.random()-.5)*6})});
+function drawFX(){
+  fxc.clearRect(0,0,W,H);
+  for(let i=trail.length-1;i>=0;i--){const p=trail[i];
+    p.a-=.045; if(p.vx){p.x+=p.vx;p.y+=p.vy;p.vx*=.92;p.vy*=.92}
+    if(p.a<=0){trail.splice(i,1);continue}
+    fxc.beginPath();fxc.arc(p.x,p.y,p.r,0,6.28);
+    fxc.fillStyle=`rgba(255,${40+120*p.a},${150+80*p.a},${p.a})`;
+    fxc.shadowColor='#ff1493';fxc.shadowBlur=14;fxc.fill();}
+  for(let i=ripples.length-1;i>=0;i--){const r=ripples[i];
+    r.r+=6;r.a-=.03; if(r.a<=0){ripples.splice(i,1);continue}
+    fxc.beginPath();fxc.arc(r.x,r.y,r.r,0,6.28);
+    fxc.strokeStyle=`rgba(255,20,147,${r.a})`;fxc.lineWidth=2;
+    fxc.shadowColor='#ff1493';fxc.shadowBlur=18;fxc.stroke();}
+}
+function loop(t){drawBG(t);drawFX();requestAnimationFrame(loop)}requestAnimationFrame(loop);
+
+/* ============================ wheel build ============================ */
+const wheel=document.getElementById('wheel'),spokes=document.getElementById('spokes');
+ORDER.forEach((key,i)=>{
+  const a=(i/ORDER.length)*Math.PI*2 - Math.PI/2;
+  const R=37; const x=50+Math.cos(a)*R, y=50+Math.sin(a)*R;
+  // spoke line
+  const ln=document.createElementNS('http://www.w3.org/2000/svg','line');
+  ln.setAttribute('x1',50);ln.setAttribute('y1',50);ln.setAttribute('x2',x);ln.setAttribute('y2',y);
+  ln.setAttribute('stroke','rgba(255,20,147,.18)');ln.setAttribute('stroke-width','.4');
+  spokes.appendChild(ln);
+  // node
+  const d=DATA[key];
+  const n=document.createElement('div');n.className='node';
+  n.style.left=x+'%';n.style.top=y+'%';
+  n.innerHTML=`<div class="ic">${d.icon}</div><div class="lb">${d.name}</div>`;
+  n.addEventListener('click',()=>openPanel(key));
+  wheel.appendChild(n);
+});
+
+/* ============================ panel ============================ */
+const panel=document.getElementById('panel'),cards=document.getElementById('cards');
+const ptitle=document.getElementById('ptitle'),psub=document.getElementById('psub');
+const toast=document.getElementById('toast');
+
+function control(o,idx){
+  const id='o'+Math.random().toString(36).slice(2,7);
+  if(o.t==='toggle'){
+    return `<div class="opt"><label>${o.l}</label>
+      <label class="sw"><input type="checkbox" ${o.def?'checked':''}>
+      <span class="track"></span><span class="txt">toggle</span></label></div>`;
+  }
+  if(o.t==='range'){
+    return `<div class="opt"><label>${o.l}<span class="rngval" id="${id}v">${o.def??o.min}</span></label>
+      <input type="range" min="${o.min}" max="${o.max}" value="${o.def??o.min}"
+      oninput="document.getElementById('${id}v').textContent=this.value"></div>`;
+  }
+  if(o.t==='select'){
+    return `<div class="opt"><label>${o.l}</label><select>${
+      o.options.map(op=>`<option ${op===o.def?'selected':''}>${op}</option>`).join('')}</select></div>`;
+  }
+  const type=o.t==='number'?'number':'text';
+  return `<div class="opt"><label>${o.l}</label><input type="${type}" placeholder="${o.l}"></div>`;
+}
+
+function openPanel(key){
+  const d=DATA[key];
+  ptitle.textContent=d.name;psub.textContent=d.sub.toUpperCase();
+  cards.innerHTML=d.commands.map((c,i)=>{
+    const cmdHtml=c.cmd.replace(/\//g,'<span class="slash">/</span>')
+      .replace(/@Ava/,'<span class="slash">@</span>Ava');
+    const opts=c.opts.length?c.opts.map(control).join(''):'<div class="cdesc">No options.</div>';
+    return `<div class="card" style="animation-delay:${i*60}ms">
+      <div class="cmd">${cmdHtml}</div>
+      <div class="cdesc">${c.desc}</div>${opts}
+      <button class="save" onclick="saveCard(this)">Save</button></div>`;
+  }).join('');
+  wheel.classList.add('hidden');panel.classList.add('open');
+}
+function closePanel(){panel.classList.remove('open');wheel.classList.remove('hidden')}
+document.getElementById('back').addEventListener('click',closePanel);
+addEventListener('keydown',e=>{if(e.key==='Escape'&&panel.classList.contains('open'))closePanel()});
+
+function saveCard(btn){
+  btn.classList.add('saved');btn.textContent='✓ Saved';
+  toast.classList.add('show');
+  clearTimeout(window._tt);window._tt=setTimeout(()=>toast.classList.remove('show'),1400);
+  setTimeout(()=>{btn.classList.remove('saved');btn.textContent='Save'},1300);
+}
+window.saveCard=saveCard;
+</script>
+</body>
+</html>

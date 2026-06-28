@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 
 import discord
 from discord.ext import commands
@@ -62,6 +63,13 @@ class AvaBot(commands.Bot):
         else:
             await self.tree.sync()
             log.info("Synced slash commands globally")
+
+        # Optional web dashboard (opt-in via DASHBOARD_PORT).
+        port = int(os.getenv("DASHBOARD_PORT", "0") or 0)
+        if port:
+            from .dashboard import start as start_dashboard
+
+            self._dashboard_runner = await start_dashboard(port)
 
     async def on_ready(self) -> None:
         assert self.user is not None
