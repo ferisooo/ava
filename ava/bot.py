@@ -40,6 +40,7 @@ class AvaBot(commands.Bot):
     async def setup_hook(self) -> None:
         # Load extensions (cogs).
         await self.load_extension("ava.cogs.moderation")
+        await self.load_extension("ava.cogs.automod")
         await self.load_extension("ava.cogs.builder")
         await self.load_extension("ava.cogs.agent")
 

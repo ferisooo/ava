@@ -21,6 +21,27 @@ DEFAULT_SETTINGS = {
     "log_channel_id": 0,        # 0 = no mod-log channel
 }
 
+# Per-guild auto-mod / anti-raid config. All values are ints (bools as 0/1).
+AUTOMOD_DEFAULTS = {
+    "enabled": 0,                # master switch
+    "block_invites": 1,         # delete Discord invite links
+    "block_mass_mentions": 1,   # delete messages with too many mentions
+    "mention_limit": 5,         # mentions allowed before it's "mass"
+    "block_spam": 1,            # delete on message-rate spam
+    "spam_count": 5,            # messages...
+    "spam_seconds": 5,          # ...within this many seconds = spam
+    "block_caps": 1,            # delete excessive-caps messages
+    "caps_min_len": 10,         # only check messages at least this long
+    "caps_percent": 70,         # % uppercase to count as shouting
+    "escalate_strikes": 3,      # auto-mod hits...
+    "escalate_minutes": 10,     # ...within 60s -> timeout this long
+    "raid_enabled": 1,          # detect mass joins
+    "raid_joins": 10,           # joins...
+    "raid_seconds": 10,         # ...within this many seconds = raid
+    "min_account_age_days": 0,  # kick accounts younger than this on join (0 = off)
+    "alert_channel_id": 0,      # where to post raid alerts (0 = system channel)
+}
+
 
 def _conn() -> sqlite3.Connection:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -57,6 +78,10 @@ def init() -> None:
                 log_channel_id INTEGER NOT NULL
             );
             """
+        )
+        automod_cols = ", ".join(f"{key} INTEGER NOT NULL" for key in AUTOMOD_DEFAULTS)
+        conn.execute(
+            f"CREATE TABLE IF NOT EXISTS automod (guild_id INTEGER PRIMARY KEY, {automod_cols})"
         )
 
 
@@ -183,4 +208,31 @@ def set_setting(guild_id: int, key: str, value: int) -> None:
                 current["warn_kick_threshold"],
                 current["log_channel_id"],
             ),
+        )
+
+
+# ---- Auto-mod settings ------------------------------------------------------
+
+def get_automod(guild_id: int) -> dict[str, int]:
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM automod WHERE guild_id = ?", (guild_id,)
+        ).fetchone()
+    if row is None:
+        return dict(AUTOMOD_DEFAULTS)
+    return {key: int(row[key]) for key in AUTOMOD_DEFAULTS}
+
+
+def set_automod(guild_id: int, key: str, value: int) -> None:
+    if key not in AUTOMOD_DEFAULTS:
+        raise KeyError(key)
+    current = get_automod(guild_id)
+    current[key] = value
+    keys = list(AUTOMOD_DEFAULTS)
+    columns = ", ".join(["guild_id"] + keys)
+    placeholders = ", ".join("?" * (len(keys) + 1))
+    with _conn() as conn:
+        conn.execute(
+            f"INSERT OR REPLACE INTO automod ({columns}) VALUES ({placeholders})",
+            [guild_id] + [current[k] for k in keys],
         )
