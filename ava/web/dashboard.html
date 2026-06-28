@@ -240,7 +240,7 @@
 <script>
 /* ============================ command data ============================ */
 const DATA = {
-  moderation:{name:"Moderation",icon:"⚔",sub:"purge · warn · kick · mute · ban",commands:[
+  moderation:{name:"Moderation",icon:"⚔",sub:"warning thresholds",commands:[
     {title:"Purge Messages",cmd:"/purge all",desc:"Delete recent messages in this channel.",opts:[{t:"range",l:"Count",min:1,max:1000,def:100}]},
     {title:"Purge a User",cmd:"/purge user",desc:"Delete a specific user's messages.",opts:[{t:"text",l:"User"},{t:"number",l:"Limit per channel"}]},
     {title:"Warn a Member",cmd:"/warn add",desc:"Warn a member (auto-escalates at thresholds).",opts:[{t:"text",l:"Reason"}]},
@@ -280,7 +280,10 @@ const DATA = {
     {title:"Agent Model",cmd:"Model",desc:"DeepSeek powers the agent & builder.",opts:[{t:"select",l:"Agent model",options:["deepseek-chat","deepseek-reasoner"],def:"deepseek-chat"}]},
   ]},
 };
-const ORDER=["moderation","security","builder","engagement","personal","agent"];
+// Only show commands wired to live settings; drop any category left empty.
+for(const k in DATA){ DATA[k].commands = DATA[k].commands.filter(c=>c.section); }
+const ORDER=["security","moderation","builder","engagement","personal","agent"]
+  .filter(k=>DATA[k] && DATA[k].commands.length);
 
 /* ============================ cursor ============================ */
 const cursor=document.getElementById('cursor');
