@@ -98,11 +98,14 @@
 
   /* panel */
   #panel{position:fixed;inset:0;z-index:30;display:flex;flex-direction:column;
-    padding:clamp(16px,4vw,48px);opacity:0;pointer-events:none;
-    transition:opacity .5s;background:radial-gradient(circle at 50% 0%,rgba(255,20,147,.06),transparent 60%)}
+    align-items:center;padding:clamp(16px,4vw,40px) clamp(12px,4vw,40px);opacity:0;
+    pointer-events:none;transition:opacity .5s;
+    background:radial-gradient(circle at 50% -8%,rgba(255,20,147,.16),rgba(4,0,3,.985) 55%),rgba(4,0,3,.985)}
   #panel.open{opacity:1;pointer-events:auto}
-  .panel-head{display:flex;align-items:center;gap:18px;margin-bottom:22px;
-    animation:slideDown .5s both}
+  body.paneling header{opacity:0;transform:translateY(-22px);
+    transition:opacity .4s,transform .4s}
+  .panel-head{width:min(760px,100%);display:flex;align-items:center;gap:18px;
+    margin-bottom:20px;animation:slideDown .5s both}
   @keyframes slideDown{from{transform:translateY(-30px);opacity:0}to{transform:none;opacity:1}}
   .back{width:54px;height:54px;border-radius:50%;border:1px solid var(--pink);
     background:rgba(255,20,147,.08);color:#fff;font-size:22px;cursor:none;
@@ -112,28 +115,29 @@
     text-shadow:var(--glow)}
   .panel-sub{font-size:12px;letter-spacing:.3em;color:var(--pink-bright);opacity:.8}
 
-  .cards{display:grid;gap:18px;overflow-y:auto;padding:6px 6px 40px;
-    grid-template-columns:repeat(auto-fill,minmax(310px,1fr));scrollbar-width:thin;
-    scrollbar-color:var(--pink) transparent}
-  .cards::-webkit-scrollbar{width:8px}
-  .cards::-webkit-scrollbar-thumb{background:var(--pink-deep);border-radius:8px}
+  .stack{width:min(760px,100%);overflow-y:auto;padding:4px 6px 60px;display:flex;
+    flex-direction:column;gap:12px;scrollbar-width:thin;scrollbar-color:var(--pink) transparent}
+  .stack::-webkit-scrollbar{width:8px}
+  .stack::-webkit-scrollbar-thumb{background:var(--pink-deep);border-radius:8px}
 
-  .card{position:relative;border:1px solid rgba(255,20,147,.28);border-radius:16px;
-    background:var(--panel);backdrop-filter:blur(6px);padding:18px 18px 16px;
-    box-shadow:0 0 0 rgba(255,20,147,0);transition:transform .35s,box-shadow .35s,border-color .35s;
-    animation:cardIn .5s both;overflow:hidden}
-  @keyframes cardIn{from{transform:translateY(24px) scale(.96);opacity:0}to{transform:none;opacity:1}}
-  .card::before{content:"";position:absolute;inset:0;border-radius:16px;padding:1px;
-    background:linear-gradient(120deg,transparent,rgba(255,20,147,.5),transparent);
-    -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
-    -webkit-mask-composite:xor;mask-composite:exclude;opacity:0;transition:opacity .4s}
-  .card:hover{transform:translateY(-6px);border-color:var(--pink);
-    box-shadow:var(--glow),0 18px 40px rgba(0,0,0,.6)}
-  .card:hover::before{opacity:1}
-  .cmd{font-family:"Consolas",monospace;font-size:16px;color:#fff;letter-spacing:.04em;
-    text-shadow:0 0 10px var(--pink-deep)}
-  .cmd .slash{color:var(--pink-bright)}
-  .cdesc{font-size:12.5px;color:#caa9bb;margin:6px 0 14px;line-height:1.5}
+  .acc{border:1px solid rgba(255,20,147,.25);border-radius:14px;background:var(--panel);
+    overflow:hidden;transition:border-color .3s,box-shadow .3s;animation:cardIn .45s both}
+  @keyframes cardIn{from{transform:translateY(16px);opacity:0}to{transform:none;opacity:1}}
+  .acc:hover{border-color:rgba(255,20,147,.55)}
+  .acc.open{border-color:var(--pink);box-shadow:var(--glow)}
+  .acc-head{width:100%;display:flex;align-items:center;gap:14px;padding:15px 18px;
+    background:none;border:none;color:#fff;cursor:none;text-align:left;transition:background .3s}
+  .acc-head:hover{background:rgba(255,20,147,.07)}
+  .acc-title{flex:1;font-size:15.5px;font-weight:600;letter-spacing:.02em;transition:text-shadow .3s}
+  .acc.open .acc-title,.acc-head:hover .acc-title{text-shadow:var(--glow)}
+  .acc-cmd{font-family:"Consolas",monospace;font-size:11px;color:var(--pink-bright);
+    background:rgba(255,20,147,.10);border:1px solid rgba(255,20,147,.3);padding:3px 9px;
+    border-radius:20px;white-space:nowrap}
+  .chev{font-size:16px;color:var(--pink-bright);transition:transform .35s;flex:none}
+  .acc.open .chev{transform:rotate(180deg)}
+  .acc-body{max-height:0;overflow:hidden;transition:max-height .4s ease}
+  .acc-inner{padding:2px 18px 18px}
+  .cdesc{font-size:12.5px;color:#caa9bb;margin:0 0 12px;line-height:1.5}
 
   .opt{margin:11px 0}
   .opt label{display:block;font-size:11px;letter-spacing:.16em;text-transform:uppercase;
@@ -207,7 +211,7 @@
       <div class="panel-sub" id="psub">—</div>
     </div>
   </div>
-  <div class="cards" id="cards"></div>
+  <div class="stack" id="cards"></div>
 </div>
 
 <div id="cursor"></div>
@@ -217,43 +221,43 @@
 /* ============================ command data ============================ */
 const DATA = {
   moderation:{name:"Moderation",icon:"⚔",sub:"purge · warn · kick · mute · ban",commands:[
-    {cmd:"/purge all",desc:"Delete recent messages in this channel.",opts:[{t:"range",l:"Count",min:1,max:1000,def:100}]},
-    {cmd:"/purge user",desc:"Delete a specific user's messages.",opts:[{t:"text",l:"User"},{t:"number",l:"Limit per channel"}]},
-    {cmd:"/warn add",desc:"Warn a member (auto-escalates at thresholds).",opts:[{t:"text",l:"Reason"}]},
-    {cmd:"/warn config",desc:"Tune warning thresholds.",opts:[{t:"range",l:"Auto-mute at (warnings)",min:1,max:20,def:3},{t:"range",l:"Mute length (min)",min:1,max:1440,def:60},{t:"range",l:"Auto-kick at (warnings)",min:1,max:20,def:5},{t:"text",l:"Mod-log channel"}]},
-    {cmd:"/kick",desc:"Remove a member.",opts:[{t:"text",l:"Member"},{t:"text",l:"Reason"}]},
-    {cmd:"/mute",desc:"Timeout a member.",opts:[{t:"text",l:"Member"},{t:"text",l:"Duration (10m, 1h, 1d)"},{t:"text",l:"Reason"}]},
-    {cmd:"/tempban",desc:"Ban for a duration, then auto-unban.",opts:[{t:"text",l:"Member"},{t:"text",l:"Duration (1d, 7d)"}]},
-    {cmd:"/slowmode",desc:"Limit how fast members post.",opts:[{t:"range",l:"Seconds",min:0,max:21600,def:0}]},
-    {cmd:"/lock · /unlock",desc:"Stop or allow chatting in a channel.",opts:[{t:"toggle",l:"Locked"}]},
-    {cmd:"/nuke",desc:"Wipe a channel (clone + delete).",opts:[{t:"toggle",l:"Require confirmation",def:true}]},
-    {cmd:"/infractions",desc:"View a member's full record.",opts:[{t:"text",l:"Member"}]},
+    {title:"Purge Messages",cmd:"/purge all",desc:"Delete recent messages in this channel.",opts:[{t:"range",l:"Count",min:1,max:1000,def:100}]},
+    {title:"Purge a User",cmd:"/purge user",desc:"Delete a specific user's messages.",opts:[{t:"text",l:"User"},{t:"number",l:"Limit per channel"}]},
+    {title:"Warn a Member",cmd:"/warn add",desc:"Warn a member (auto-escalates at thresholds).",opts:[{t:"text",l:"Reason"}]},
+    {title:"Warning Thresholds",cmd:"/warn config",desc:"Tune warning thresholds.",opts:[{t:"range",l:"Auto-mute at (warnings)",min:1,max:20,def:3},{t:"range",l:"Mute length (min)",min:1,max:1440,def:60},{t:"range",l:"Auto-kick at (warnings)",min:1,max:20,def:5},{t:"text",l:"Mod-log channel"}]},
+    {title:"Kick",cmd:"/kick",desc:"Remove a member.",opts:[{t:"text",l:"Member"},{t:"text",l:"Reason"}]},
+    {title:"Mute (timeout)",cmd:"/mute",desc:"Timeout a member.",opts:[{t:"text",l:"Member"},{t:"text",l:"Duration (10m, 1h, 1d)"},{t:"text",l:"Reason"}]},
+    {title:"Temp Ban",cmd:"/tempban",desc:"Ban for a duration, then auto-unban.",opts:[{t:"text",l:"Member"},{t:"text",l:"Duration (1d, 7d)"}]},
+    {title:"Slowmode",cmd:"/slowmode",desc:"Limit how fast members post.",opts:[{t:"range",l:"Seconds",min:0,max:21600,def:0}]},
+    {title:"Lock / Unlock",cmd:"/lock · /unlock",desc:"Stop or allow chatting in a channel.",opts:[{t:"toggle",l:"Locked"}]},
+    {title:"Nuke Channel",cmd:"/nuke",desc:"Wipe a channel (clone + delete).",opts:[{t:"toggle",l:"Require confirmation",def:true}]},
+    {title:"Infraction History",cmd:"/infractions",desc:"View a member's full record.",opts:[{t:"text",l:"Member"}]},
   ]},
   security:{name:"Security",icon:"🛡",sub:"auto-mod · anti-raid",commands:[
-    {cmd:"/security",desc:"Apply a protection preset.",opts:[{t:"select",l:"Level",options:["Easy","Medium","Hard","Strict"],def:"Medium"}]},
-    {cmd:"/automod (filters)",desc:"Message filters.",opts:[{t:"toggle",l:"Block invites",def:true},{t:"toggle",l:"Block mass mentions",def:true},{t:"toggle",l:"Block spam",def:true},{t:"toggle",l:"Block caps",def:true},{t:"range",l:"Mention limit",min:1,max:50,def:5}]},
-    {cmd:"/automod spam",desc:"Spam sensitivity.",opts:[{t:"range",l:"Messages",min:2,max:20,def:5},{t:"range",l:"Within seconds",min:1,max:30,def:5}]},
-    {cmd:"/automod escalate",desc:"Auto-timeout on repeat hits.",opts:[{t:"range",l:"Strikes / 60s",min:1,max:20,def:3},{t:"range",l:"Timeout (min)",min:1,max:1440,def:10}]},
-    {cmd:"/automod raid",desc:"Mass-join protection.",opts:[{t:"toggle",l:"Detect raids",def:true},{t:"range",l:"Joins",min:2,max:100,def:10},{t:"range",l:"Within seconds",min:1,max:600,def:10},{t:"range",l:"Min account age (days)",min:0,max:365,def:0}]},
+    {title:"Security Level",cmd:"/security",desc:"Apply a protection preset.",opts:[{t:"select",l:"Level",options:["Easy","Medium","Hard","Strict"],def:"Medium"}]},
+    {title:"Message Filters",cmd:"/automod (filters)",desc:"Message filters.",opts:[{t:"toggle",l:"Block invites",def:true},{t:"toggle",l:"Block mass mentions",def:true},{t:"toggle",l:"Block spam",def:true},{t:"toggle",l:"Block caps",def:true},{t:"range",l:"Mention limit",min:1,max:50,def:5}]},
+    {title:"Spam Sensitivity",cmd:"/automod spam",desc:"Spam sensitivity.",opts:[{t:"range",l:"Messages",min:2,max:20,def:5},{t:"range",l:"Within seconds",min:1,max:30,def:5}]},
+    {title:"Auto-Escalation",cmd:"/automod escalate",desc:"Auto-timeout on repeat hits.",opts:[{t:"range",l:"Strikes / 60s",min:1,max:20,def:3},{t:"range",l:"Timeout (min)",min:1,max:1440,def:10}]},
+    {title:"Anti-Raid",cmd:"/automod raid",desc:"Mass-join protection.",opts:[{t:"toggle",l:"Detect raids",def:true},{t:"range",l:"Joins",min:2,max:100,def:10},{t:"range",l:"Within seconds",min:1,max:600,def:10},{t:"range",l:"Min account age (days)",min:0,max:365,def:0}]},
   ]},
   builder:{name:"Builder",icon:"🏗",sub:"AI server designer",commands:[
-    {cmd:"/build_server preset",desc:"Build from a themed preset.",opts:[{t:"select",l:"Preset",options:["Gaming Hub","Study Lounge","Creator Community","Anime Club","Music Den","Movie Night","Roleplay Realm","Tech Support","Art Studio","Fitness Crew","Crypto Corner","Book Club","Friend Hangout","School Server","Business Network","Minecraft SMP","Roblox Squad","Esports Team","Podcast Community","Meme Central"]}]},
-    {cmd:"/build_server custom",desc:"Describe a server for DeepSeek to design.",opts:[{t:"text",l:"Description"}]},
+    {title:"Build from Preset",cmd:"/build_server preset",desc:"Build from a themed preset.",opts:[{t:"select",l:"Preset",options:["Gaming Hub","Study Lounge","Creator Community","Anime Club","Music Den","Movie Night","Roleplay Realm","Tech Support","Art Studio","Fitness Crew","Crypto Corner","Book Club","Friend Hangout","School Server","Business Network","Minecraft SMP","Roblox Squad","Esports Team","Podcast Community","Meme Central"]}]},
+    {title:"Custom AI Build",cmd:"/build_server custom",desc:"Describe a server for DeepSeek to design.",opts:[{t:"text",l:"Description"}]},
   ]},
   engagement:{name:"Engagement",icon:"✦",sub:"welcome · roles · sticky · voice",commands:[
-    {cmd:"/welcome",desc:"Custom welcome embed for new members.",opts:[{t:"toggle",l:"Enabled",def:true},{t:"text",l:"Channel"},{t:"text",l:"Title"},{t:"text",l:"Message ({user} {server} {count})"},{t:"text",l:"Color (#hex)"}]},
-    {cmd:"/reactionrole",desc:"React to get a role.",opts:[{t:"text",l:"Message ID"},{t:"text",l:"Emoji"},{t:"text",l:"Role"}]},
-    {cmd:"/sticky",desc:"Pin a message to the bottom of a channel.",opts:[{t:"text",l:"Sticky text"}]},
-    {cmd:"/tempvoice",desc:"Join-to-create lockable voice channels.",opts:[{t:"text",l:"Hub voice channel"},{t:"text",l:"Category"}]},
+    {title:"Welcome Messages",cmd:"/welcome",desc:"Custom welcome embed for new members.",opts:[{t:"toggle",l:"Enabled",def:true},{t:"text",l:"Channel"},{t:"text",l:"Title"},{t:"text",l:"Message ({user} {server} {count})"},{t:"text",l:"Color (#hex)"}]},
+    {title:"Reaction Roles",cmd:"/reactionrole",desc:"React to get a role.",opts:[{t:"text",l:"Message ID"},{t:"text",l:"Emoji"},{t:"text",l:"Role"}]},
+    {title:"Sticky Message",cmd:"/sticky",desc:"Pin a message to the bottom of a channel.",opts:[{t:"text",l:"Sticky text"}]},
+    {title:"Temp Voice",cmd:"/tempvoice",desc:"Join-to-create lockable voice channels.",opts:[{t:"text",l:"Hub voice channel"},{t:"text",l:"Category"}]},
   ]},
   personal:{name:"Personal",icon:"📓",sub:"private to each user",commands:[
-    {cmd:"/diary write",desc:"Save a private journal entry.",opts:[{t:"text",l:"Entry"}]},
-    {cmd:"/diary list",desc:"List your entries.",opts:[]},
-    {cmd:"/diary read · delete",desc:"Open or remove an entry.",opts:[{t:"number",l:"Entry #"}]},
+    {title:"Write Entry",cmd:"/diary write",desc:"Save a private journal entry.",opts:[{t:"text",l:"Entry"}]},
+    {title:"List Entries",cmd:"/diary list",desc:"List your entries.",opts:[]},
+    {title:"Read / Delete",cmd:"/diary read · delete",desc:"Open or remove an entry.",opts:[{t:"number",l:"Entry #"}]},
   ]},
   agent:{name:"Agent",icon:"🤖",sub:"talk to Ava in plain English",commands:[
-    {cmd:"@Ava …",desc:"Natural-language server actions (admins).",opts:[{t:"text",l:"Try: add a 🎮 symbol to #general"}]},
-    {cmd:"Model",desc:"DeepSeek powers the agent & builder.",opts:[{t:"select",l:"Agent model",options:["deepseek-chat","deepseek-reasoner"],def:"deepseek-chat"}]},
+    {title:"Natural Language",cmd:"@Ava …",desc:"Natural-language server actions (admins).",opts:[{t:"text",l:"Try: add a 🎮 symbol to #general"}]},
+    {title:"Agent Model",cmd:"Model",desc:"DeepSeek powers the agent & builder.",opts:[{t:"select",l:"Agent model",options:["deepseek-chat","deepseek-reasoner"],def:"deepseek-chat"}]},
   ]},
 };
 const ORDER=["moderation","security","builder","engagement","personal","agent"];
@@ -363,17 +367,29 @@ function openPanel(key){
   const d=DATA[key];
   ptitle.textContent=d.name;psub.textContent=d.sub.toUpperCase();
   cards.innerHTML=d.commands.map((c,i)=>{
-    const cmdHtml=c.cmd.replace(/\//g,'<span class="slash">/</span>')
-      .replace(/@Ava/,'<span class="slash">@</span>Ava');
-    const opts=c.opts.length?c.opts.map(control).join(''):'<div class="cdesc">No options.</div>';
-    return `<div class="card" style="animation-delay:${i*60}ms">
-      <div class="cmd">${cmdHtml}</div>
-      <div class="cdesc">${c.desc}</div>${opts}
-      <button class="save" onclick="saveCard(this)">Save</button></div>`;
+    const opts=c.opts.length?c.opts.map(control).join(''):'';
+    return `<div class="acc" style="animation-delay:${i*55}ms">
+      <button class="acc-head" onclick="toggleAcc(this)">
+        <span class="acc-title">${c.title}</span>
+        <span class="acc-cmd">${c.cmd}</span>
+        <span class="chev">⌄</span>
+      </button>
+      <div class="acc-body"><div class="acc-inner">
+        <div class="cdesc">${c.desc}</div>${opts}
+        <button class="save" onclick="saveCard(this)">Save</button>
+      </div></div></div>`;
   }).join('');
+  document.body.classList.add('paneling');
   wheel.classList.add('hidden');panel.classList.add('open');
 }
-function closePanel(){panel.classList.remove('open');wheel.classList.remove('hidden')}
+function toggleAcc(btn){
+  const acc=btn.parentElement, body=btn.nextElementSibling;
+  const open=acc.classList.toggle('open');
+  body.style.maxHeight = open ? body.scrollHeight + 'px' : '';
+}
+window.toggleAcc=toggleAcc;
+function closePanel(){panel.classList.remove('open');wheel.classList.remove('hidden');
+  document.body.classList.remove('paneling')}
 document.getElementById('back').addEventListener('click',closePanel);
 addEventListener('keydown',e=>{if(e.key==='Escape'&&panel.classList.contains('open'))closePanel()});
 
