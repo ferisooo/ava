@@ -115,8 +115,10 @@
     text-shadow:var(--glow)}
   .panel-sub{font-size:12px;letter-spacing:.3em;color:var(--pink-bright);opacity:.8}
 
-  .stack{width:min(760px,100%);overflow-y:auto;padding:4px 6px 60px;display:flex;
-    flex-direction:column;gap:12px;scrollbar-width:thin;scrollbar-color:var(--pink) transparent}
+  .stack{width:min(760px,100%);overflow-y:auto;padding:12px 6px 60px;display:flex;
+    flex-direction:column;gap:12px;scrollbar-width:thin;scrollbar-color:var(--pink) transparent;
+    -webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 18px);
+    mask-image:linear-gradient(to bottom,transparent 0,#000 18px)}
   .stack::-webkit-scrollbar{width:8px}
   .stack::-webkit-scrollbar-thumb{background:var(--pink-deep);border-radius:8px}
 
@@ -125,10 +127,11 @@
   @keyframes cardIn{from{transform:translateY(16px);opacity:0}to{transform:none;opacity:1}}
   .acc:hover{border-color:rgba(255,20,147,.55)}
   .acc.open{border-color:var(--pink);box-shadow:var(--glow)}
-  .acc-head{width:100%;display:flex;align-items:center;gap:14px;padding:15px 18px;
+  .acc-head{width:100%;display:flex;align-items:center;gap:12px;padding:15px 20px;
     background:none;border:none;color:#fff;cursor:none;text-align:left;transition:background .3s}
   .acc-head:hover{background:rgba(255,20,147,.07)}
-  .acc-title{flex:1;font-size:15.5px;font-weight:600;letter-spacing:.02em;transition:text-shadow .3s}
+  .acc-title{flex:1;min-width:0;font-size:15.5px;font-weight:600;letter-spacing:.02em;
+    transition:text-shadow .3s;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .acc.open .acc-title,.acc-head:hover .acc-title{text-shadow:var(--glow)}
   .acc-cmd{font-family:"Consolas",monospace;font-size:11px;color:var(--pink-bright);
     background:rgba(255,20,147,.10);border:1px solid rgba(255,20,147,.3);padding:3px 9px;
