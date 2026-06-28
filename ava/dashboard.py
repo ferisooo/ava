@@ -121,6 +121,29 @@ async def _apply_section(guild: discord.Guild, section: str, values: dict) -> st
         )
         return f"Security set to {preset['label']} (verification: {preset['verification'].name})."
 
+    if section == "reactionrole":
+        from . import rroles
+
+        channel = rroles.resolve_channel(guild, values.get("channel", ""))
+        if channel is None:
+            raise ValueError("Couldn't find that channel.")
+        role_name = str(values.get("role_name", "")).strip()
+        emoji = str(values.get("emoji", "")).strip()
+        category = str(values.get("category", "")).strip() or "Roles"
+        if not role_name or not emoji:
+            raise ValueError("Role name and emoji are both required.")
+        exclusive = bool(int(values.get("exclusive", 0) or 0))
+        try:
+            _msg, role = await rroles.add_role_entry(
+                guild, channel, role_name, category, emoji, exclusive
+            )
+        except discord.Forbidden:
+            raise ValueError(
+                "I need Manage Roles + Manage Messages, and my role must be above the new role."
+            )
+        mode = "pick one" if exclusive else "pick any"
+        return f"Added {role.name} ({emoji}) to #{channel.name} under “{category}” ({mode})."
+
     raise ValueError("This control isn't wired to live settings yet.")
 
 

@@ -264,9 +264,9 @@ const DATA = {
     {title:"Build from Preset",cmd:"/build_server preset",desc:"Build from a themed preset.",opts:[{t:"select",l:"Preset",options:["Gaming Hub","Study Lounge","Creator Community","Anime Club","Music Den","Movie Night","Roleplay Realm","Tech Support","Art Studio","Fitness Crew","Crypto Corner","Book Club","Friend Hangout","School Server","Business Network","Minecraft SMP","Roblox Squad","Esports Team","Podcast Community","Meme Central"]}]},
     {title:"Custom AI Build",cmd:"/build_server custom",desc:"Describe a server for DeepSeek to design.",opts:[{t:"text",l:"Description"}]},
   ]},
-  engagement:{name:"Engagement",icon:"✦",sub:"welcome · roles · sticky · voice",commands:[
+  engagement:{name:"Engagement",icon:"✦",sub:"reaction roles",commands:[
     {title:"Welcome Messages",cmd:"/welcome",desc:"Custom welcome embed for new members.",opts:[{t:"toggle",l:"Enabled",def:true},{t:"text",l:"Channel"},{t:"text",l:"Title"},{t:"text",l:"Message ({user} {server} {count})"},{t:"text",l:"Color (#hex)"}]},
-    {title:"Reaction Roles",cmd:"/reactionrole",desc:"React to get a role.",opts:[{t:"text",l:"Message ID"},{t:"text",l:"Emoji"},{t:"text",l:"Role"}]},
+    {title:"Reaction Roles",cmd:"/reactionrole",section:"reactionrole",desc:"Create a role and post it in a channel — react to get it. Live.",opts:[{t:"text",l:"Channel (name or ID)",key:"channel"},{t:"text",l:"Role name",key:"role_name"},{t:"text",l:"Category",key:"category"},{t:"text",l:"Emoji",key:"emoji"},{t:"toggle",l:"Only one per category",def:false,key:"exclusive"}]},
     {title:"Sticky Message",cmd:"/sticky",desc:"Pin a message to the bottom of a channel.",opts:[{t:"text",l:"Sticky text"}]},
     {title:"Temp Voice",cmd:"/tempvoice",desc:"Join-to-create lockable voice channels.",opts:[{t:"text",l:"Hub voice channel"},{t:"text",l:"Category"}]},
   ]},

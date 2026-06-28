@@ -117,15 +117,39 @@ class ReactionRoles(commands.Cog):
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent) -> None:
         if payload.guild_id is None or payload.member is None or payload.member.bot:
             return
-        role_id = store.get_reaction_role(payload.message_id, str(payload.emoji))
-        if role_id is None:
+        emoji = str(payload.emoji)
+        entry = store.get_reaction_role_full(payload.message_id, emoji)
+        if entry is None:
             return
-        role = payload.member.guild.get_role(role_id)
+        guild = payload.member.guild
+        member = payload.member
+        role = guild.get_role(entry["role_id"])
         if role is not None:
             try:
-                await payload.member.add_roles(role, reason="Reaction role")
+                await member.add_roles(role, reason="Reaction role")
             except discord.HTTPException:
                 pass
+
+        # Exclusive category: strip the member's other roles + reactions here.
+        if entry["exclusive"] and entry["category"]:
+            channel = guild.get_channel(entry["channel_id"] or payload.channel_id)
+            message = None
+            for other in store.list_category_reaction_roles(payload.message_id, entry["category"]):
+                if other["emoji"] == emoji:
+                    continue
+                other_role = guild.get_role(other["role_id"])
+                if other_role and other_role in member.roles:
+                    try:
+                        await member.remove_roles(other_role, reason="Exclusive reaction role")
+                    except discord.HTTPException:
+                        pass
+                if isinstance(channel, discord.TextChannel):
+                    try:
+                        if message is None:
+                            message = await channel.fetch_message(payload.message_id)
+                        await message.remove_reaction(other["emoji"], member)
+                    except discord.HTTPException:
+                        pass
 
     @commands.Cog.listener()
     async def on_raw_reaction_remove(self, payload: discord.RawReactionActionEvent) -> None:

@@ -83,14 +83,32 @@ def init() -> None:
         conn.execute(
             f"CREATE TABLE IF NOT EXISTS automod (guild_id INTEGER PRIMARY KEY, {automod_cols})"
         )
+        # Migrate older reaction_roles tables that predate the panel columns.
+        for col, ddl in (
+            ("channel_id", "INTEGER NOT NULL DEFAULT 0"),
+            ("category", "TEXT NOT NULL DEFAULT ''"),
+            ("exclusive", "INTEGER NOT NULL DEFAULT 0"),
+        ):
+            try:
+                conn.execute(f"ALTER TABLE reaction_roles ADD COLUMN {col} {ddl}")
+            except sqlite3.OperationalError:
+                pass
         conn.executescript(
             """
             CREATE TABLE IF NOT EXISTS reaction_roles (
                 guild_id INTEGER NOT NULL,
+                channel_id INTEGER NOT NULL DEFAULT 0,
                 message_id INTEGER NOT NULL,
                 emoji TEXT NOT NULL,
                 role_id INTEGER NOT NULL,
+                category TEXT NOT NULL DEFAULT '',
+                exclusive INTEGER NOT NULL DEFAULT 0,
                 PRIMARY KEY (message_id, emoji)
+            );
+            CREATE TABLE IF NOT EXISTS rr_panels (
+                channel_id INTEGER PRIMARY KEY,
+                guild_id INTEGER NOT NULL,
+                message_id INTEGER NOT NULL
             );
             CREATE TABLE IF NOT EXISTS welcome (
                 guild_id INTEGER PRIMARY KEY,
@@ -282,12 +300,21 @@ def set_automod(guild_id: int, key: str, value: int) -> None:
 
 # ---- Reaction roles ---------------------------------------------------------
 
-def add_reaction_role(guild_id: int, message_id: int, emoji: str, role_id: int) -> None:
+def add_reaction_role(
+    guild_id: int,
+    message_id: int,
+    emoji: str,
+    role_id: int,
+    channel_id: int = 0,
+    category: str = "",
+    exclusive: int = 0,
+) -> None:
     with _conn() as conn:
         conn.execute(
-            "INSERT OR REPLACE INTO reaction_roles (guild_id, message_id, emoji, role_id) "
-            "VALUES (?, ?, ?, ?)",
-            (guild_id, message_id, emoji, role_id),
+            "INSERT OR REPLACE INTO reaction_roles "
+            "(guild_id, channel_id, message_id, emoji, role_id, category, exclusive) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (guild_id, channel_id, message_id, emoji, role_id, category, exclusive),
         )
 
 
@@ -307,6 +334,62 @@ def get_reaction_role(message_id: int, emoji: str) -> Optional[int]:
             (message_id, emoji),
         ).fetchone()
         return int(row["role_id"]) if row else None
+
+
+def get_reaction_role_full(message_id: int, emoji: str) -> Optional[dict[str, Any]]:
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM reaction_roles WHERE message_id = ? AND emoji = ?",
+            (message_id, emoji),
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def list_message_reaction_roles(message_id: int) -> list[dict[str, Any]]:
+    with _conn() as conn:
+        return [
+            dict(r)
+            for r in conn.execute(
+                "SELECT * FROM reaction_roles WHERE message_id = ? ORDER BY rowid",
+                (message_id,),
+            ).fetchall()
+        ]
+
+
+def list_category_reaction_roles(message_id: int, category: str) -> list[dict[str, Any]]:
+    with _conn() as conn:
+        return [
+            dict(r)
+            for r in conn.execute(
+                "SELECT * FROM reaction_roles WHERE message_id = ? AND category = ?",
+                (message_id, category),
+            ).fetchall()
+        ]
+
+
+def set_category_exclusive(message_id: int, category: str, exclusive: int) -> None:
+    with _conn() as conn:
+        conn.execute(
+            "UPDATE reaction_roles SET exclusive = ? WHERE message_id = ? AND category = ?",
+            (exclusive, message_id, category),
+        )
+
+
+def set_rr_panel(channel_id: int, guild_id: int, message_id: int) -> None:
+    with _conn() as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO rr_panels (channel_id, guild_id, message_id) "
+            "VALUES (?, ?, ?)",
+            (channel_id, guild_id, message_id),
+        )
+
+
+def get_rr_panel(channel_id: int) -> Optional[dict[str, Any]]:
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM rr_panels WHERE channel_id = ?", (channel_id,)
+        ).fetchone()
+        return dict(row) if row else None
 
 
 def list_reaction_roles(guild_id: int) -> list[dict[str, Any]]:
