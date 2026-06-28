@@ -115,32 +115,44 @@
     text-shadow:var(--glow)}
   .panel-sub{font-size:12px;letter-spacing:.3em;color:var(--pink-bright);opacity:.8}
 
-  .stack{width:min(760px,100%);flex:1 1 auto;min-height:0;overflow-y:auto;
-    padding:12px 6px 60px;display:flex;
-    flex-direction:column;gap:12px;scrollbar-width:thin;scrollbar-color:var(--pink) transparent;
-    -webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 18px);
-    mask-image:linear-gradient(to bottom,transparent 0,#000 18px)}
-  .stack::-webkit-scrollbar{width:8px}
-  .stack::-webkit-scrollbar-thumb{background:var(--pink-deep);border-radius:8px}
+  /* green text accent (theme override per request) */
+  :root{--green:#27e06a;--green-deep:#0f8f3e}
 
-  .acc{border:1px solid rgba(255,20,147,.25);border-radius:14px;background:var(--panel);
-    overflow:hidden;transition:border-color .3s,box-shadow .3s;animation:cardIn .45s both}
+  .grid{width:min(960px,100%);flex:1 1 auto;min-height:0;overflow-y:auto;
+    display:grid;grid-template-columns:repeat(4,1fr);gap:14px;padding:12px 8px 70px;
+    align-content:start;scrollbar-width:thin;scrollbar-color:var(--pink) transparent}
+  .grid::-webkit-scrollbar{width:8px}
+  .grid::-webkit-scrollbar-thumb{background:var(--pink-deep);border-radius:8px}
+  @media(max-width:860px){.grid{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:480px){.grid{grid-template-columns:1fr}}
+
+  .tile{position:relative;border:1px solid rgba(255,20,147,.28);border-radius:14px;
+    background:var(--panel);padding:16px 14px;min-height:94px;cursor:none;display:flex;
+    flex-direction:column;justify-content:center;gap:9px;text-align:left;
+    transition:transform .3s,box-shadow .3s,border-color .3s;animation:cardIn .4s both}
   @keyframes cardIn{from{transform:translateY(16px);opacity:0}to{transform:none;opacity:1}}
-  .acc:hover{border-color:rgba(255,20,147,.55)}
-  .acc.open{border-color:var(--pink);box-shadow:var(--glow)}
-  .acc-head{width:100%;display:flex;align-items:center;gap:12px;padding:15px 20px;
-    background:none;border:none;color:#fff;cursor:none;text-align:left;transition:background .3s}
-  .acc-head:hover{background:rgba(255,20,147,.07)}
-  .acc-title{flex:1;min-width:0;font-size:15.5px;font-weight:600;letter-spacing:.02em;
-    transition:text-shadow .3s;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .acc.open .acc-title,.acc-head:hover .acc-title{text-shadow:var(--glow)}
-  .acc-cmd{font-family:"Consolas",monospace;font-size:11px;color:var(--pink-bright);
-    background:rgba(255,20,147,.10);border:1px solid rgba(255,20,147,.3);padding:3px 9px;
-    border-radius:20px;white-space:nowrap}
-  .chev{font-size:16px;color:var(--pink-bright);transition:transform .35s;flex:none}
-  .acc.open .chev{transform:rotate(180deg)}
-  .acc-body{max-height:0;overflow:hidden;transition:max-height .4s ease}
-  .acc-inner{padding:2px 18px 18px}
+  .tile:hover{transform:translateY(-4px);border-color:var(--pink);box-shadow:var(--glow)}
+  .tile.active{border-color:var(--pink);box-shadow:var(--glow)}
+  .tile-title{font-size:14.5px;font-weight:700;letter-spacing:.02em;color:var(--green);
+    transition:text-shadow .3s}
+  .tile:hover .tile-title,.tile.active .tile-title{
+    text-shadow:0 0 6px var(--green),0 0 16px var(--green-deep)}
+  .tile-cmd{align-self:flex-start;max-width:100%;font-family:"Consolas",monospace;font-size:10px;
+    color:var(--pink-bright);background:rgba(255,20,147,.10);border:1px solid rgba(255,20,147,.3);
+    padding:2px 8px;border-radius:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  /* floating option popover (overlaps tiles below) */
+  #pop{position:fixed;z-index:55;width:340px;max-width:92vw;background:#0a0008;
+    border:1px solid var(--pink);border-radius:14px;
+    box-shadow:var(--glow),0 24px 60px rgba(0,0,0,.78);padding:16px 18px;opacity:0;
+    transform:translateY(-8px) scale(.97);pointer-events:none;
+    transition:opacity .22s,transform .22s;overflow-y:auto;
+    scrollbar-width:thin;scrollbar-color:var(--pink) transparent}
+  #pop.show{opacity:1;transform:none;pointer-events:auto}
+  #pop::-webkit-scrollbar{width:7px}
+  #pop::-webkit-scrollbar-thumb{background:var(--pink-deep);border-radius:8px}
+  #pop .poptitle{font-size:16px;font-weight:700;color:var(--green);margin-bottom:4px;
+    text-shadow:0 0 6px var(--green),0 0 16px var(--green-deep)}
   .cdesc{font-size:12.5px;color:#caa9bb;margin:0 0 12px;line-height:1.5}
 
   .opt{margin:11px 0}
@@ -215,9 +227,10 @@
       <div class="panel-sub" id="psub">—</div>
     </div>
   </div>
-  <div class="stack" id="cards"></div>
+  <div class="grid" id="cards"></div>
 </div>
 
+<div id="pop"></div>
 <div id="cursor"></div>
 <div class="toast" id="toast">SAVED</div>
 
@@ -367,47 +380,59 @@ function control(o,idx){
   return `<div class="opt"><label>${o.l}</label><input type="${type}" placeholder="${o.l}"></div>`;
 }
 
+const pop=document.getElementById('pop');
+let currentCmds=[], activeTile=null;
+
 function openPanel(key){
   const d=DATA[key];
   ptitle.textContent=d.name;psub.textContent=d.sub.toUpperCase();
-  cards.innerHTML=d.commands.map((c,i)=>{
-    const opts=c.opts.length?c.opts.map(control).join(''):'';
-    return `<div class="acc" style="animation-delay:${i*55}ms">
-      <button class="acc-head" onclick="toggleAcc(this)">
-        <span class="acc-title">${c.title}</span>
-        <span class="acc-cmd">${c.cmd}</span>
-        <span class="chev">⌄</span>
-      </button>
-      <div class="acc-body"><div class="acc-inner">
-        <div class="cdesc">${c.desc}</div>${opts}
-        <button class="save" onclick="saveCard(this)">Save</button>
-      </div></div></div>`;
-  }).join('');
+  currentCmds=d.commands;
+  cards.innerHTML=d.commands.map((c,i)=>
+    `<button class="tile" data-i="${i}" style="animation-delay:${i*40}ms">
+       <span class="tile-title">${c.title}</span>
+       <span class="tile-cmd">${c.cmd}</span>
+     </button>`).join('');
+  cards.querySelectorAll('.tile').forEach(t=>t.addEventListener('click',e=>{
+    e.stopPropagation();
+    openPop(t, currentCmds[+t.dataset.i]);
+  }));
   document.body.classList.add('paneling');
   wheel.classList.add('hidden');panel.classList.add('open');
 }
-function toggleAcc(btn){
-  const acc=btn.parentElement, body=btn.nextElementSibling;
-  const open=acc.classList.toggle('open');
-  if(open){
-    body.style.maxHeight = body.scrollHeight + 'px';
-    // After the open transition, release the cap so nothing can be clipped
-    // (and so controls below the fold stay clickable).
-    body.addEventListener('transitionend', function te(e){
-      if(e.propertyName==='max-height' && acc.classList.contains('open')){
-        body.style.maxHeight='none';
-        body.removeEventListener('transitionend',te);
-      }
-    });
-  }else{
-    // Going from 'none' back to 0 needs an explicit start height to animate.
-    body.style.maxHeight = body.scrollHeight + 'px';
-    requestAnimationFrame(()=>{ body.style.maxHeight=''; });
-  }
+
+function openPop(tile, c){
+  if(activeTile===tile){closePop();return;}
+  closePop();
+  activeTile=tile; tile.classList.add('active');
+  const opts=c.opts.length?c.opts.map(control).join(''):'';
+  pop.innerHTML=`<div class="poptitle">${c.title}</div>
+    <div class="cdesc">${c.desc}</div>${opts}
+    <button class="save" onclick="saveCard(this)">Save</button>`;
+  positionPop(tile);
+  pop.classList.add('show');
 }
-window.toggleAcc=toggleAcc;
+function positionPop(tile){
+  const r=tile.getBoundingClientRect();
+  const w=Math.min(340, innerWidth*0.92);
+  let left=Math.max(10, Math.min(r.left, innerWidth - w - 10));
+  let top=r.bottom + 8;
+  pop.style.left=left+'px';
+  pop.style.top=top+'px';
+  // Cap height to the space below so it always fits and scrolls internally.
+  pop.style.maxHeight=Math.max(160, innerHeight - top - 16)+'px';
+}
+function closePop(){
+  pop.classList.remove('show');
+  if(activeTile)activeTile.classList.remove('active');
+  activeTile=null;
+}
+pop.addEventListener('click',e=>e.stopPropagation());
+document.addEventListener('click',()=>closePop());
+cards.addEventListener('scroll',()=>closePop());
+addEventListener('resize',()=>closePop());
+
 function closePanel(){panel.classList.remove('open');wheel.classList.remove('hidden');
-  document.body.classList.remove('paneling')}
+  document.body.classList.remove('paneling');closePop()}
 document.getElementById('back').addEventListener('click',closePanel);
 addEventListener('keydown',e=>{if(e.key==='Escape'&&panel.classList.contains('open'))closePanel()});
 
