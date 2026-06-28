@@ -59,6 +59,12 @@ async def _state(request: web.Request) -> web.StreamResponse:
             "key_required": _key_configured(),
             "automod": store.get_automod(guild.id),
             "warn": store.get_settings(guild.id),
+            "channels": [
+                {"id": str(c.id), "name": c.name} for c in guild.text_channels
+            ],
+            "emojis": [
+                {"label": e.name, "value": str(e)} for e in guild.emojis
+            ],
         }
     )
 

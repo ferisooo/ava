@@ -100,7 +100,8 @@ async def add_role_entry(
     entries = store.list_message_reaction_roles(message.id)
     await message.edit(content=render_panel(entries))
     try:
-        await message.add_reaction(emoji)
+        # PartialEmoji.from_str handles both unicode and custom <:name:id> forms.
+        await message.add_reaction(discord.PartialEmoji.from_str(emoji))
     except discord.HTTPException:
         pass
     return message, role

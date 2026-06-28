@@ -266,7 +266,7 @@ const DATA = {
   ]},
   engagement:{name:"Engagement",icon:"✦",sub:"reaction roles",commands:[
     {title:"Welcome Messages",cmd:"/welcome",desc:"Custom welcome embed for new members.",opts:[{t:"toggle",l:"Enabled",def:true},{t:"text",l:"Channel"},{t:"text",l:"Title"},{t:"text",l:"Message ({user} {server} {count})"},{t:"text",l:"Color (#hex)"}]},
-    {title:"Reaction Roles",cmd:"/reactionrole",section:"reactionrole",desc:"Create a role and post it in a channel — react to get it. Live.",opts:[{t:"text",l:"Channel (name or ID)",key:"channel"},{t:"text",l:"Role name",key:"role_name"},{t:"text",l:"Category",key:"category"},{t:"text",l:"Emoji",key:"emoji"},{t:"toggle",l:"Only one per category",def:false,key:"exclusive"}]},
+    {title:"Reaction Roles",cmd:"/reactionrole",section:"reactionrole",desc:"Create a role and post it in a channel — react to get it. Live.",opts:[{t:"channel",l:"Channel",key:"channel"},{t:"text",l:"Role name",key:"role_name"},{t:"text",l:"Category",key:"category"},{t:"emoji",l:"Emoji",key:"emoji"},{t:"toggle",l:"Only one per category",def:false,key:"exclusive"}]},
     {title:"Sticky Message",cmd:"/sticky",desc:"Pin a message to the bottom of a channel.",opts:[{t:"text",l:"Sticky text"}]},
     {title:"Temp Voice",cmd:"/tempvoice",desc:"Join-to-create lockable voice channels.",opts:[{t:"text",l:"Hub voice channel"},{t:"text",l:"Category"}]},
   ]},
@@ -382,6 +382,21 @@ function control(o){
   if(o.t==='select'){
     return `<div class="opt"><label>${o.l}</label><select ${dk}>${
       o.options.map(op=>`<option ${op===o.def?'selected':''}>${op}</option>`).join('')}</select></div>`;
+  }
+  if(o.t==='channel'){
+    const chs=(STATE.channels||[]);
+    const opts=['<option value="">— select a channel —</option>']
+      .concat(chs.map(c=>`<option value="${c.id}">#${c.name}</option>`)).join('');
+    return `<div class="opt"><label>${o.l}</label><select ${dk}>${opts}</select></div>`;
+  }
+  if(o.t==='emoji'){
+    const common=['🔴','🟠','🟡','🟢','🔵','🟣','⚪','⚫','🟤','✅','❌','⭐','🔥','💎','🎮','🎲','🎯','🎵','🎨','📚','💬','🔔','🎉','🚀','💀','🌙','⚡','🏆','👑','🤖'];
+    const custom=(STATE.emojis||[]);
+    let opts='<option value="">— select an emoji —</option>';
+    opts+='<optgroup label="Emoji">'+common.map(e=>`<option value="${e}">${e}</option>`).join('')+'</optgroup>';
+    if(custom.length) opts+='<optgroup label="Server emoji">'+
+      custom.map(e=>`<option value="${e.value}">:${e.label}:</option>`).join('')+'</optgroup>';
+    return `<div class="opt"><label>${o.l}</label><select ${dk} class="emoji-sel">${opts}</select></div>`;
   }
   const type=o.t==='number'?'number':'text';
   return `<div class="opt"><label>${o.l}</label><input type="${type}" ${dk} placeholder="${o.l}"></div>`;
