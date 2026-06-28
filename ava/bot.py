@@ -52,19 +52,6 @@ class AvaBot(commands.Bot):
         await self.load_extension("ava.cogs.agent")
         await self.load_extension("ava.cogs.dashboard_cmd")
 
-        # Sync application (slash) commands. Syncing to specific guilds is
-        # instant and ideal for development; a global sync can take up to an
-        # hour to propagate.
-        if self.config.dev_guild_ids:
-            for guild_id in self.config.dev_guild_ids:
-                guild = discord.Object(id=guild_id)
-                self.tree.copy_global_to(guild=guild)
-                await self.tree.sync(guild=guild)
-                log.info("Synced slash commands to guild %s", guild_id)
-        else:
-            await self.tree.sync()
-            log.info("Synced slash commands globally")
-
         # Optional web dashboard (opt-in via DASHBOARD_PORT).
         port = int(os.getenv("DASHBOARD_PORT", "0") or 0)
         if port:
@@ -72,8 +59,34 @@ class AvaBot(commands.Bot):
 
             self._dashboard_runner = await start_dashboard(port)
 
+    async def _sync_commands(self) -> None:
+        """Instant per-guild sync so new commands appear immediately on restart.
+
+        Copies the global commands into each guild Ava is in, clears the global
+        set (so old global copies don't linger as duplicates), then syncs each
+        guild — guild commands update instantly, unlike global ones.
+        """
+        guilds = self.guilds
+        if not guilds:
+            await self.tree.sync()
+            log.info("Synced commands globally (not in any guild yet)")
+            return
+        for guild in guilds:
+            self.tree.copy_global_to(guild=guild)
+        self.tree.clear_commands(guild=None)
+        await self.tree.sync()  # remove any stale global commands
+        for guild in guilds:
+            await self.tree.sync(guild=guild)
+        log.info("Instantly synced commands to %d guild(s)", len(guilds))
+
     async def on_ready(self) -> None:
         assert self.user is not None
+        if not getattr(self, "_synced", False):
+            self._synced = True
+            try:
+                await self._sync_commands()
+            except discord.HTTPException:
+                log.exception("Command sync failed")
         log.info("Logged in as %s (id=%s)", self.user, self.user.id)
 
 
