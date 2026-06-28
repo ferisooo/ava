@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 
 import discord
 from discord.ext import commands
@@ -24,7 +25,28 @@ class Agent(commands.Cog):
         content = message.content
         for token in (f"<@{self.bot.user.id}>", f"<@!{self.bot.user.id}>"):
             content = content.replace(token, " ")
-        return content.strip()
+        return self._humanize(message.guild, content).strip()
+
+    def _humanize(self, guild: discord.Guild, text: str) -> str:
+        """Turn raw mentions (<#id>, <@&id>, <@id>) into readable names so the
+        model understands which channel/role/member the user meant."""
+
+        def channel(m: re.Match) -> str:
+            ch = guild.get_channel(int(m.group(1)))
+            return f"#{ch.name}" if ch else m.group(0)
+
+        def role(m: re.Match) -> str:
+            r = guild.get_role(int(m.group(1)))
+            return f"@{r.name}" if r else m.group(0)
+
+        def member(m: re.Match) -> str:
+            mem = guild.get_member(int(m.group(1)))
+            return f"@{mem.display_name}" if mem else m.group(0)
+
+        text = re.sub(r"<#(\d+)>", channel, text)
+        text = re.sub(r"<@&(\d+)>", role, text)
+        text = re.sub(r"<@!?(\d+)>", member, text)
+        return text
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message) -> None:
