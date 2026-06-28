@@ -90,6 +90,12 @@
   /* spokes */
   #spokes{position:absolute;inset:0;z-index:-1;pointer-events:none}
 
+  /* rotating orbit (nodes spin around the center together) */
+  .orbit{position:absolute;inset:0;animation:rot 55s linear infinite}
+  .node-inner{display:flex;flex-direction:column;align-items:center;
+    animation:rot 55s linear infinite reverse}
+  #wheel:hover .orbit,#wheel:hover .node-inner,#wheel:hover .ring{animation-play-state:paused}
+
   /* hint */
   .hint{position:fixed;bottom:22px;left:0;right:0;text-align:center;z-index:20;
     font-size:11px;letter-spacing:.4em;color:var(--pink-bright);opacity:.55;
@@ -366,6 +372,9 @@ function loop(t){drawBG(t);drawFX();requestAnimationFrame(loop)}requestAnimation
 
 /* ============================ wheel build ============================ */
 const wheel=document.getElementById('wheel'),spokes=document.getElementById('spokes');
+// Rotating orbit holds the nodes + spokes so the whole wheel spins together.
+const orbit=document.createElement('div');orbit.className='orbit';
+wheel.appendChild(orbit);orbit.appendChild(spokes);
 ORDER.forEach((key,i)=>{
   const a=(i/ORDER.length)*Math.PI*2 - Math.PI/2;
   const R=37; const x=50+Math.cos(a)*R, y=50+Math.sin(a)*R;
@@ -374,13 +383,13 @@ ORDER.forEach((key,i)=>{
   ln.setAttribute('x1',50);ln.setAttribute('y1',50);ln.setAttribute('x2',x);ln.setAttribute('y2',y);
   ln.setAttribute('stroke','rgba(255,20,147,.18)');ln.setAttribute('stroke-width','.4');
   spokes.appendChild(ln);
-  // node
+  // node (inner content counter-rotates so the label stays upright)
   const d=DATA[key];
   const n=document.createElement('div');n.className='node';
   n.style.left=x+'%';n.style.top=y+'%';
-  n.innerHTML=`<div class="ic">${d.icon}</div><div class="lb">${d.name}</div>`;
+  n.innerHTML=`<div class="node-inner"><div class="ic">${d.icon}</div><div class="lb">${d.name}</div></div>`;
   n.addEventListener('click',()=>openPanel(key));
-  wheel.appendChild(n);
+  orbit.appendChild(n);
 });
 
 /* ============================ panel ============================ */
