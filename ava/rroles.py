@@ -67,6 +67,34 @@ def render_panel(entries: list[dict]) -> str:
     return "\n".join(lines)[:2000]
 
 
+def _panel_handle(guild: discord.Guild, channel: discord.TextChannel):
+    """Return a (partial) message for the channel's panel — no fetch needed."""
+    panel = store.get_rr_panel(channel.id)
+    if panel:
+        return channel.get_partial_message(panel["message_id"])
+    return None
+
+
+async def _render_or_recreate(guild, channel, message):
+    """Edit the panel; if it was deleted, recreate it and re-key entries."""
+    entries = store.list_message_reaction_roles(message.id)
+    body = render_panel(entries)
+    try:
+        await message.edit(content=body)
+        return message
+    except discord.NotFound:
+        pass
+    new = await channel.send(body)
+    for e in entries:
+        store.add_reaction_role(
+            e["guild_id"], new.id, e["emoji"], e["role_id"],
+            channel.id, e["category"], e["exclusive"],
+        )
+        store.remove_reaction_role(message.id, e["emoji"])
+    store.set_rr_panel(channel.id, guild.id, new.id)
+    return new
+
+
 async def add_role_entry(
     guild: discord.Guild,
     channel: discord.TextChannel,
@@ -80,13 +108,7 @@ async def add_role_entry(
     category = category.strip() or "Roles"
     emoji = emoji.strip()
 
-    panel = store.get_rr_panel(channel.id)
-    message: discord.Message | None = None
-    if panel:
-        try:
-            message = await channel.fetch_message(panel["message_id"])
-        except discord.NotFound:
-            message = None
+    message = _panel_handle(guild, channel)
     if message is None:
         message = await channel.send("Setting up reaction roles…")
         store.set_rr_panel(channel.id, guild.id, message.id)
@@ -97,8 +119,7 @@ async def add_role_entry(
     # Keep the whole category consistent (one/many applies category-wide).
     store.set_category_exclusive(message.id, category, 1 if exclusive else 0)
 
-    entries = store.list_message_reaction_roles(message.id)
-    await message.edit(content=render_panel(entries))
+    message = await _render_or_recreate(guild, channel, message)
     try:
         # PartialEmoji.from_str handles both unicode and custom <:name:id> forms.
         await message.add_reaction(discord.PartialEmoji.from_str(emoji))
@@ -107,16 +128,11 @@ async def add_role_entry(
     return message, role
 
 
-async def _panel_message(
-    channel: discord.TextChannel,
-) -> discord.Message | None:
+async def _panel_message(channel: discord.TextChannel):
     panel = store.get_rr_panel(channel.id)
     if not panel:
         return None
-    try:
-        return await channel.fetch_message(panel["message_id"])
-    except discord.NotFound:
-        return None
+    return channel.get_partial_message(panel["message_id"])
 
 
 async def refresh_panel(channel: discord.TextChannel) -> None:
@@ -126,7 +142,10 @@ async def refresh_panel(channel: discord.TextChannel) -> None:
         return
     entries = store.list_message_reaction_roles(message.id)
     if entries:
-        await message.edit(content=render_panel(entries))
+        try:
+            await message.edit(content=render_panel(entries))
+        except discord.NotFound:
+            store.remove_rr_panel(channel.id)
     else:
         try:
             await message.delete()
