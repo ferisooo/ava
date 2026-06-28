@@ -45,6 +45,8 @@ class Config:
     # reasoner doesn't support tools, so it uses deepseek-chat by default.
     deepseek_agent_model: str = "deepseek-chat"
     deepseek_base_url: str = "https://api.deepseek.com"
+    # Public URL of the web dashboard, used by the /dashboard command.
+    dashboard_url: str = ""
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -71,6 +73,7 @@ class Config:
             os.getenv("DEEPSEEK_AGENT_MODEL", "deepseek-chat").strip() or "deepseek-chat"
         )
         deepseek_base = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com").strip().rstrip("/")
+        dashboard_url = os.getenv("DASHBOARD_URL", "").strip()
 
         return cls(
             token=token,
@@ -80,4 +83,5 @@ class Config:
             deepseek_model=deepseek_model,
             deepseek_agent_model=deepseek_agent_model,
             deepseek_base_url=deepseek_base or "https://api.deepseek.com",
+            dashboard_url=dashboard_url,
         )

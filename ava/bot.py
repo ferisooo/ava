@@ -50,6 +50,7 @@ class AvaBot(commands.Bot):
         await self.load_extension("ava.cogs.diary")
         await self.load_extension("ava.cogs.builder")
         await self.load_extension("ava.cogs.agent")
+        await self.load_extension("ava.cogs.dashboard_cmd")
 
         # Sync application (slash) commands. Syncing to specific guilds is
         # instant and ideal for development; a global sync can take up to an
