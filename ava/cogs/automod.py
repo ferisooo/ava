@@ -34,7 +34,10 @@ class AutoMod(commands.Cog):
     """Automatic moderation and raid protection."""
 
     automod_group = app_commands.Group(
-        name="automod", description="Auto-mod & anti-raid settings.", guild_only=True
+        name="automod",
+        description="Auto-mod & anti-raid settings.",
+        guild_only=True,
+        default_permissions=discord.Permissions(manage_guild=True),
     )
 
     def __init__(self, bot: commands.Bot) -> None:

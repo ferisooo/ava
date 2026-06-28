@@ -37,7 +37,10 @@ def _build_embed(cfg: dict, member: discord.Member) -> discord.Embed:
 
 class Welcome(commands.Cog):
     group = app_commands.Group(
-        name="welcome", description="Welcome-message settings.", guild_only=True
+        name="welcome",
+        description="Welcome-message settings.",
+        guild_only=True,
+        default_permissions=discord.Permissions(manage_guild=True),
     )
 
     def __init__(self, bot: commands.Bot) -> None:

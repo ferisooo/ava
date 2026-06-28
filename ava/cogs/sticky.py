@@ -16,7 +16,10 @@ log = logging.getLogger("ava.sticky")
 
 class Sticky(commands.Cog):
     group = app_commands.Group(
-        name="sticky", description="Keep a message at the bottom of a channel.", guild_only=True
+        name="sticky",
+        description="Keep a message at the bottom of a channel.",
+        guild_only=True,
+        default_permissions=discord.Permissions(manage_messages=True),
     )
 
     def __init__(self, bot: commands.Bot) -> None:

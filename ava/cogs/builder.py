@@ -179,6 +179,7 @@ class Builder(commands.Cog):
     )
     @app_commands.choices(preset=_PRESET_CHOICES)
     @app_commands.guild_only()
+    @app_commands.default_permissions(administrator=True)
     @app_commands.checks.has_permissions(administrator=True)
     @app_commands.checks.bot_has_permissions(manage_channels=True, manage_roles=True)
     async def build_server(

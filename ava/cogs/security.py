@@ -65,6 +65,7 @@ class Security(commands.Cog):
         store.init()
 
     @app_commands.command(name="security", description="Apply a security preset to this server.")
+    @app_commands.default_permissions(manage_guild=True)
     @app_commands.describe(level="How strict to be.")
     @app_commands.choices(
         level=[

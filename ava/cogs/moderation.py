@@ -33,17 +33,59 @@ def parse_duration(text: str) -> Optional[timedelta]:
     return timedelta(seconds=total) if total > 0 else None
 
 
-def _hierarchy_error(interaction: discord.Interaction, member: discord.Member) -> Optional[str]:
+def _tier(member: discord.abc.User) -> int:
+    """Staff tier: 0 = regular, 1 = mod, 2 = admin."""
+    if not isinstance(member, discord.Member):
+        return 0
+    p = member.guild_permissions
+    if p.administrator or p.manage_guild:
+        return 2
+    if (
+        p.kick_members
+        or p.ban_members
+        or p.moderate_members
+        or p.manage_messages
+        or p.manage_roles
+        or p.manage_channels
+    ):
+        return 1
+    return 0
+
+
+def _protection_error(
+    interaction: discord.Interaction,
+    member: discord.Member,
+    *,
+    require_bot_higher: bool = True,
+) -> Optional[str]:
+    """Prevent trolling between staff.
+
+    Rules (the server owner bypasses all of them):
+    - Nobody may action an admin except the owner.
+    - You may not action someone at your own staff tier or higher.
+    - You may not action someone whose top role is at/above yours.
+    """
     guild = interaction.guild
     assert guild is not None
-    if member == guild.owner:
-        return "I can't action the server owner."
-    if member.id == interaction.client.user.id:  # type: ignore[union-attr]
+    me = guild.me
+    if member.id == me.id:
         return "I'm not going to action myself. 🙂"
-    if member.top_role >= guild.me.top_role:
+    if member == guild.owner:
+        return "I won't action the server owner."
+    if require_bot_higher and member.top_role >= me.top_role:
         return "That member's highest role is above mine — move my role higher in Server Settings → Roles."
+
     actor = interaction.user
-    if actor != guild.owner and isinstance(actor, discord.Member) and member.top_role >= actor.top_role:
+    if actor == guild.owner:
+        return None
+
+    target_tier = _tier(member)
+    actor_tier = _tier(actor)
+    if target_tier >= 2:
+        return "🛡️ Only the server owner can moderate an admin."
+    if target_tier >= actor_tier:
+        return "🛡️ You can't moderate someone at your own staff level or higher."
+    if isinstance(actor, discord.Member) and member.top_role >= actor.top_role:
         return "You can only moderate members below your own highest role."
     return None
 
@@ -95,10 +137,16 @@ class Moderation(commands.Cog):
 
     # Grouped command sets — typing /purge or /warn reveals the subcommands.
     purge_group = app_commands.Group(
-        name="purge", description="Delete messages.", guild_only=True
+        name="purge",
+        description="Delete messages.",
+        guild_only=True,
+        default_permissions=discord.Permissions(manage_messages=True),
     )
     warn_group = app_commands.Group(
-        name="warn", description="Warnings and infraction logs.", guild_only=True
+        name="warn",
+        description="Warnings and infraction logs.",
+        guild_only=True,
+        default_permissions=discord.Permissions(kick_members=True),
     )
 
     def __init__(self, bot: commands.Bot) -> None:
@@ -206,6 +254,13 @@ class Moderation(commands.Cog):
         limit: Optional[app_commands.Range[int, 1, 10000]] = None,
     ) -> None:
         assert interaction.guild is not None
+        # Don't let a lower-tier mod scrub a peer's or an admin's messages.
+        target_member = interaction.guild.get_member(user.id)
+        if target_member is not None:
+            err = _protection_error(interaction, target_member, require_bot_higher=False)
+            if err:
+                await interaction.response.send_message(f"🚫 {err}", ephemeral=True)
+                return
         await interaction.response.defer(ephemeral=True, thinking=True)
         if channel is not None:
             result = await purge_user_in_channel(channel, user, limit=limit)
@@ -228,6 +283,7 @@ class Moderation(commands.Cog):
     # Member punishments
     # ------------------------------------------------------------------ #
     @app_commands.command(name="kick", description="Kick a member.")
+    @app_commands.default_permissions(kick_members=True)
     @app_commands.describe(member="Member to kick.", reason="Why (optional).")
     @app_commands.guild_only()
     @app_commands.checks.has_permissions(kick_members=True)
@@ -235,7 +291,7 @@ class Moderation(commands.Cog):
     async def kick(
         self, interaction: discord.Interaction, member: discord.Member, reason: Optional[str] = None
     ) -> None:
-        err = _hierarchy_error(interaction, member)
+        err = _protection_error(interaction, member)
         if err:
             await interaction.response.send_message(f"🚫 {err}", ephemeral=True)
             return
@@ -247,6 +303,7 @@ class Moderation(commands.Cog):
         )
 
     @app_commands.command(name="mute", description="Timeout a member for a duration (e.g. 10m, 1h, 1d).")
+    @app_commands.default_permissions(moderate_members=True)
     @app_commands.describe(member="Member to mute.", duration="e.g. 30m, 2h, 1d (max 28d).", reason="Why (optional).")
     @app_commands.guild_only()
     @app_commands.checks.has_permissions(moderate_members=True)
@@ -258,7 +315,7 @@ class Moderation(commands.Cog):
         duration: str,
         reason: Optional[str] = None,
     ) -> None:
-        err = _hierarchy_error(interaction, member)
+        err = _protection_error(interaction, member)
         if err:
             await interaction.response.send_message(f"🚫 {err}", ephemeral=True)
             return
@@ -282,15 +339,21 @@ class Moderation(commands.Cog):
         )
 
     @app_commands.command(name="unmute", description="Remove a member's timeout.")
+    @app_commands.default_permissions(moderate_members=True)
     @app_commands.describe(member="Member to unmute.")
     @app_commands.guild_only()
     @app_commands.checks.has_permissions(moderate_members=True)
     @app_commands.checks.bot_has_permissions(moderate_members=True)
     async def unmute(self, interaction: discord.Interaction, member: discord.Member) -> None:
+        err = _protection_error(interaction, member)
+        if err:
+            await interaction.response.send_message(f"🚫 {err}", ephemeral=True)
+            return
         await member.timeout(None, reason=f"Unmute by {interaction.user}")
         await interaction.response.send_message(f"🔊 Unmuted **{member}**.")
 
     @app_commands.command(name="tempban", description="Ban a member for a duration, then auto-unban.")
+    @app_commands.default_permissions(ban_members=True)
     @app_commands.describe(member="Member to ban.", duration="e.g. 1d, 7d, 2w.", reason="Why (optional).")
     @app_commands.guild_only()
     @app_commands.checks.has_permissions(ban_members=True)
@@ -302,7 +365,7 @@ class Moderation(commands.Cog):
         duration: str,
         reason: Optional[str] = None,
     ) -> None:
-        err = _hierarchy_error(interaction, member)
+        err = _protection_error(interaction, member)
         if err:
             await interaction.response.send_message(f"🚫 {err}", ephemeral=True)
             return
@@ -326,6 +389,7 @@ class Moderation(commands.Cog):
         )
 
     @app_commands.command(name="unban", description="Unban a user by their ID.")
+    @app_commands.default_permissions(ban_members=True)
     @app_commands.describe(user_id="The banned user's ID.")
     @app_commands.guild_only()
     @app_commands.checks.has_permissions(ban_members=True)
@@ -349,6 +413,7 @@ class Moderation(commands.Cog):
     # Channel control
     # ------------------------------------------------------------------ #
     @app_commands.command(name="slowmode", description="Set this channel's slowmode (seconds; 0 to clear).")
+    @app_commands.default_permissions(manage_channels=True)
     @app_commands.describe(seconds="Seconds between messages (0–21600).")
     @app_commands.guild_only()
     @app_commands.checks.has_permissions(manage_channels=True)
@@ -365,6 +430,7 @@ class Moderation(commands.Cog):
         await interaction.response.send_message(f"🐌 {msg.capitalize()} in {channel.mention}.")
 
     @app_commands.command(name="lock", description="Stop @everyone from sending in this channel.")
+    @app_commands.default_permissions(manage_channels=True)
     @app_commands.guild_only()
     @app_commands.checks.has_permissions(manage_channels=True)
     @app_commands.checks.bot_has_permissions(manage_roles=True)
@@ -380,6 +446,7 @@ class Moderation(commands.Cog):
         await interaction.response.send_message(f"🔒 Locked {channel.mention}.")
 
     @app_commands.command(name="unlock", description="Allow @everyone to send in this channel again.")
+    @app_commands.default_permissions(manage_channels=True)
     @app_commands.guild_only()
     @app_commands.checks.has_permissions(manage_channels=True)
     @app_commands.checks.bot_has_permissions(manage_roles=True)
@@ -396,7 +463,8 @@ class Moderation(commands.Cog):
 
     @app_commands.command(name="nuke", description="Wipe this channel by cloning it and deleting the old one.")
     @app_commands.guild_only()
-    @app_commands.checks.has_permissions(manage_channels=True)
+    @app_commands.default_permissions(manage_guild=True)
+    @app_commands.checks.has_permissions(manage_guild=True)
     @app_commands.checks.bot_has_permissions(manage_channels=True)
     async def nuke(self, interaction: discord.Interaction) -> None:
         channel = interaction.channel
@@ -421,7 +489,7 @@ class Moderation(commands.Cog):
         self, interaction: discord.Interaction, member: discord.Member, reason: Optional[str] = None
     ) -> None:
         assert interaction.guild is not None
-        err = _hierarchy_error(interaction, member)
+        err = _protection_error(interaction, member)
         if err:
             await interaction.response.send_message(f"🚫 {err}", ephemeral=True)
             return
@@ -529,6 +597,7 @@ class Moderation(commands.Cog):
         )
 
     @app_commands.command(name="infractions", description="Show a member's full infraction history.")
+    @app_commands.default_permissions(kick_members=True)
     @app_commands.describe(member="Member to look up.")
     @app_commands.guild_only()
     @app_commands.checks.has_permissions(kick_members=True)

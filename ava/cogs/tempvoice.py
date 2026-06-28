@@ -16,7 +16,10 @@ log = logging.getLogger("ava.tempvoice")
 
 class TempVoice(commands.Cog):
     hub_group = app_commands.Group(
-        name="tempvoice", description="Set up join-to-create voice hubs.", guild_only=True
+        name="tempvoice",
+        description="Set up join-to-create voice hubs.",
+        guild_only=True,
+        default_permissions=discord.Permissions(manage_guild=True),
     )
     voice_group = app_commands.Group(
         name="voice", description="Control your temporary voice channel.", guild_only=True

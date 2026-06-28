@@ -15,7 +15,10 @@ log = logging.getLogger("ava.reactionroles")
 
 class ReactionRoles(commands.Cog):
     group = app_commands.Group(
-        name="reactionrole", description="Self-assign roles by reacting.", guild_only=True
+        name="reactionrole",
+        description="Self-assign roles by reacting.",
+        guild_only=True,
+        default_permissions=discord.Permissions(manage_roles=True),
     )
 
     def __init__(self, bot: commands.Bot) -> None:
@@ -40,6 +43,24 @@ class ReactionRoles(commands.Cog):
         if role >= interaction.guild.me.top_role:
             await interaction.response.send_message(
                 "🚫 That role is above mine — move my role higher.", ephemeral=True
+            )
+            return
+        # Stop a mod from handing out a role at/above their own level.
+        actor = interaction.user
+        if (
+            isinstance(actor, discord.Member)
+            and actor != interaction.guild.owner
+            and role >= actor.top_role
+        ):
+            await interaction.response.send_message(
+                "🚫 You can't assign a role at or above your own highest role.",
+                ephemeral=True,
+            )
+            return
+        if role.permissions.administrator or role.permissions.manage_guild:
+            await interaction.response.send_message(
+                "🚫 I won't make a reaction role that grants admin-level permissions.",
+                ephemeral=True,
             )
             return
         channel = interaction.channel
