@@ -65,6 +65,11 @@ async def _state(request: web.Request) -> web.StreamResponse:
             "emojis": [
                 {"label": e.name, "value": str(e)} for e in guild.emojis
             ],
+            "roles": [
+                {"id": str(r.id), "name": r.name}
+                for r in reversed(guild.roles)
+                if r.name != "@everyone" and not r.managed
+            ],
         }
     )
 
@@ -118,6 +123,18 @@ async def _apply(request: web.Request) -> web.StreamResponse:
         message = await _apply_section(guild, section, values)
     except ValueError as exc:
         return web.json_response({"ok": False, "error": str(exc)}, status=400)
+    except discord.RateLimited as exc:
+        mins = int(exc.retry_after // 60) + 1
+        return web.json_response(
+            {
+                "ok": False,
+                "error": (
+                    f"Discord is rate-limiting this action (too many roles created at once) — "
+                    f"try again in about {mins} min, or attach an existing role instead."
+                ),
+            },
+            status=429,
+        )
     except discord.HTTPException as exc:
         return web.json_response({"ok": False, "error": f"Discord error: {exc}"}, status=400)
     return web.json_response({"ok": True, "message": message})

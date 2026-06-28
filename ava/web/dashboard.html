@@ -598,6 +598,8 @@ function renderRR(c){
   const chs=(STATE.channels||[]);
   const chOpts=['<option value="">— select a channel —</option>']
     .concat(chs.map(x=>`<option value="${x.id}">#${x.name}</option>`)).join('');
+  const roleList=(STATE.roles||[])
+    .map(r=>`<option value="${r.name.replace(/"/g,'&quot;')}"></option>`).join('');
   pop.dataset.section='reactionrole';
   pop.innerHTML=`<div class="poptitle">${c.title}<span class="livebadge">● LIVE</span></div>
     <div class="cdesc">${c.desc}</div>
@@ -605,7 +607,7 @@ function renderRR(c){
     <div class="rr-list">Pick a channel to manage its roles.</div>
     <div class="rr-divider"></div>
     <div class="rr-formtitle" data-formtitle>Add a role</div>
-    <div class="opt"><label>Role name</label><input type="text" class="rr-role" placeholder="Role name"></div>
+    <div class="opt"><label>Role name</label><input type="text" class="rr-role" list="rr-rolelist" placeholder="Pick an existing role or type a new one"><datalist id="rr-rolelist">${roleList}</datalist></div>
     <div class="opt"><label>Category</label><input type="text" class="rr-cat" placeholder="Category"></div>
     ${control({t:'emoji',l:'Emoji',key:''})}
     <div class="opt"><label>Only one per category</label>
