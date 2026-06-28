@@ -159,7 +159,7 @@
   .cdesc{font-size:12.5px;color:#caa9bb;margin:0 0 12px;line-height:1.5}
 
   .opt{margin:11px 0}
-  .opt label{display:block;font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+  .opt label:not(.sw){display:block;font-size:11px;letter-spacing:.16em;text-transform:uppercase;
     color:var(--pink-bright);margin-bottom:6px;opacity:.85}
   .opt input[type=text],.opt input[type=number],.opt select{width:100%;
     background:rgba(0,0,0,.6);border:1px solid rgba(255,20,147,.35);border-radius:9px;
@@ -372,7 +372,7 @@ function control(o){
   if(o.t==='toggle'){
     return `<div class="opt"><label>${o.l}</label>
       <label class="sw"><input type="checkbox" ${dk} ${o.def?'checked':''}>
-      <span class="track"></span><span class="txt">toggle</span></label></div>`;
+      <span class="track"></span></label></div>`;
   }
   if(o.t==='range'){
     return `<div class="opt"><label>${o.l}<span class="rngval" id="${id}v">${o.def??o.min}</span></label>
