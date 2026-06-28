@@ -153,6 +153,9 @@
   #pop::-webkit-scrollbar-thumb{background:var(--pink-deep);border-radius:8px}
   #pop .poptitle{font-size:16px;font-weight:700;color:var(--green);margin-bottom:4px;
     text-shadow:0 0 6px var(--green),0 0 16px var(--green-deep)}
+  .livebadge{margin-left:10px;font-size:9px;letter-spacing:.18em;color:var(--green);
+    border:1px solid var(--green);border-radius:20px;padding:2px 8px;vertical-align:middle;
+    text-shadow:none;animation:breathe 2s ease-in-out infinite}
   .cdesc{font-size:12.5px;color:#caa9bb;margin:0 0 12px;line-height:1.5}
 
   .opt{margin:11px 0}
@@ -241,7 +244,7 @@ const DATA = {
     {title:"Purge Messages",cmd:"/purge all",desc:"Delete recent messages in this channel.",opts:[{t:"range",l:"Count",min:1,max:1000,def:100}]},
     {title:"Purge a User",cmd:"/purge user",desc:"Delete a specific user's messages.",opts:[{t:"text",l:"User"},{t:"number",l:"Limit per channel"}]},
     {title:"Warn a Member",cmd:"/warn add",desc:"Warn a member (auto-escalates at thresholds).",opts:[{t:"text",l:"Reason"}]},
-    {title:"Warning Thresholds",cmd:"/warn config",desc:"Tune warning thresholds.",opts:[{t:"range",l:"Auto-mute at (warnings)",min:1,max:20,def:3},{t:"range",l:"Mute length (min)",min:1,max:1440,def:60},{t:"range",l:"Auto-kick at (warnings)",min:1,max:20,def:5},{t:"text",l:"Mod-log channel"}]},
+    {title:"Warning Thresholds",cmd:"/warn config",section:"warn",desc:"Auto-mute then auto-kick at these warning counts. Live.",opts:[{t:"range",l:"Auto-mute at (warnings)",min:1,max:20,def:3,key:"warn_mute_threshold"},{t:"range",l:"Mute length (min)",min:1,max:1440,def:60,key:"warn_mute_minutes"},{t:"range",l:"Auto-kick at (warnings)",min:1,max:20,def:5,key:"warn_kick_threshold"}]},
     {title:"Kick",cmd:"/kick",desc:"Remove a member.",opts:[{t:"text",l:"Member"},{t:"text",l:"Reason"}]},
     {title:"Mute (timeout)",cmd:"/mute",desc:"Timeout a member.",opts:[{t:"text",l:"Member"},{t:"text",l:"Duration (10m, 1h, 1d)"},{t:"text",l:"Reason"}]},
     {title:"Temp Ban",cmd:"/tempban",desc:"Ban for a duration, then auto-unban.",opts:[{t:"text",l:"Member"},{t:"text",l:"Duration (1d, 7d)"}]},
@@ -251,11 +254,11 @@ const DATA = {
     {title:"Infraction History",cmd:"/infractions",desc:"View a member's full record.",opts:[{t:"text",l:"Member"}]},
   ]},
   security:{name:"Security",icon:"🛡",sub:"auto-mod · anti-raid",commands:[
-    {title:"Security Level",cmd:"/security",desc:"Apply a protection preset.",opts:[{t:"select",l:"Level",options:["Easy","Medium","Hard","Strict"],def:"Medium"}]},
-    {title:"Message Filters",cmd:"/automod (filters)",desc:"Message filters.",opts:[{t:"toggle",l:"Block invites",def:true},{t:"toggle",l:"Block mass mentions",def:true},{t:"toggle",l:"Block spam",def:true},{t:"toggle",l:"Block caps",def:true},{t:"range",l:"Mention limit",min:1,max:50,def:5}]},
-    {title:"Spam Sensitivity",cmd:"/automod spam",desc:"Spam sensitivity.",opts:[{t:"range",l:"Messages",min:2,max:20,def:5},{t:"range",l:"Within seconds",min:1,max:30,def:5}]},
-    {title:"Auto-Escalation",cmd:"/automod escalate",desc:"Auto-timeout on repeat hits.",opts:[{t:"range",l:"Strikes / 60s",min:1,max:20,def:3},{t:"range",l:"Timeout (min)",min:1,max:1440,def:10}]},
-    {title:"Anti-Raid",cmd:"/automod raid",desc:"Mass-join protection.",opts:[{t:"toggle",l:"Detect raids",def:true},{t:"range",l:"Joins",min:2,max:100,def:10},{t:"range",l:"Within seconds",min:1,max:600,def:10},{t:"range",l:"Min account age (days)",min:0,max:365,def:0}]},
+    {title:"Security Level",cmd:"/security",section:"security",desc:"Apply a protection preset (also sets server verification level). Live.",opts:[{t:"select",l:"Level",options:["Easy","Medium","Hard","Strict"],def:"Medium",key:"level"}]},
+    {title:"Message Filters",cmd:"/automod",section:"automod",desc:"Delete invites, mass mentions, spam, and caps. Live.",opts:[{t:"toggle",l:"Auto-mod enabled",def:false,key:"enabled"},{t:"toggle",l:"Block invites",def:true,key:"block_invites"},{t:"toggle",l:"Block mass mentions",def:true,key:"block_mass_mentions"},{t:"toggle",l:"Block spam",def:true,key:"block_spam"},{t:"toggle",l:"Block caps",def:true,key:"block_caps"},{t:"range",l:"Mention limit",min:1,max:50,def:5,key:"mention_limit"}]},
+    {title:"Spam Sensitivity",cmd:"/automod",section:"automod",desc:"How many messages count as spam. Live.",opts:[{t:"range",l:"Messages",min:2,max:20,def:5,key:"spam_count"},{t:"range",l:"Within seconds",min:1,max:30,def:5,key:"spam_seconds"}]},
+    {title:"Auto-Escalation",cmd:"/automod",section:"automod",desc:"Auto-timeout on repeat hits. Live.",opts:[{t:"range",l:"Strikes / 60s",min:1,max:20,def:3,key:"escalate_strikes"},{t:"range",l:"Timeout (min)",min:1,max:1440,def:10,key:"escalate_minutes"}]},
+    {title:"Anti-Raid",cmd:"/automod raid",section:"automod",desc:"Mass-join protection. Live.",opts:[{t:"toggle",l:"Detect raids",def:true,key:"raid_enabled"},{t:"range",l:"Joins",min:2,max:100,def:10,key:"raid_joins"},{t:"range",l:"Within seconds",min:1,max:600,def:10,key:"raid_seconds"},{t:"range",l:"Min account age (days)",min:0,max:365,def:0,key:"min_account_age_days"}]},
   ]},
   builder:{name:"Builder",icon:"🏗",sub:"AI server designer",commands:[
     {title:"Build from Preset",cmd:"/build_server preset",desc:"Build from a themed preset.",opts:[{t:"select",l:"Preset",options:["Gaming Hub","Study Lounge","Creator Community","Anime Club","Music Den","Movie Night","Roleplay Realm","Tech Support","Art Studio","Fitness Crew","Crypto Corner","Book Club","Friend Hangout","School Server","Business Network","Minecraft SMP","Roblox Squad","Esports Team","Podcast Community","Meme Central"]}]},
@@ -360,24 +363,25 @@ const panel=document.getElementById('panel'),cards=document.getElementById('card
 const ptitle=document.getElementById('ptitle'),psub=document.getElementById('psub');
 const toast=document.getElementById('toast');
 
-function control(o,idx){
+function control(o){
   const id='o'+Math.random().toString(36).slice(2,7);
+  const dk=`data-key="${o.key||''}"`;
   if(o.t==='toggle'){
     return `<div class="opt"><label>${o.l}</label>
-      <label class="sw"><input type="checkbox" ${o.def?'checked':''}>
+      <label class="sw"><input type="checkbox" ${dk} ${o.def?'checked':''}>
       <span class="track"></span><span class="txt">toggle</span></label></div>`;
   }
   if(o.t==='range'){
     return `<div class="opt"><label>${o.l}<span class="rngval" id="${id}v">${o.def??o.min}</span></label>
-      <input type="range" min="${o.min}" max="${o.max}" value="${o.def??o.min}"
+      <input type="range" ${dk} min="${o.min}" max="${o.max}" value="${o.def??o.min}"
       oninput="document.getElementById('${id}v').textContent=this.value"></div>`;
   }
   if(o.t==='select'){
-    return `<div class="opt"><label>${o.l}</label><select>${
+    return `<div class="opt"><label>${o.l}</label><select ${dk}>${
       o.options.map(op=>`<option ${op===o.def?'selected':''}>${op}</option>`).join('')}</select></div>`;
   }
   const type=o.t==='number'?'number':'text';
-  return `<div class="opt"><label>${o.l}</label><input type="${type}" placeholder="${o.l}"></div>`;
+  return `<div class="opt"><label>${o.l}</label><input type="${type}" ${dk} placeholder="${o.l}"></div>`;
 }
 
 const pop=document.getElementById('pop');
@@ -405,9 +409,21 @@ function openPop(tile, c){
   closePop();
   activeTile=tile; tile.classList.add('active');
   const opts=c.opts.length?c.opts.map(control).join(''):'';
-  pop.innerHTML=`<div class="poptitle">${c.title}</div>
+  const live=c.section?'<span class="livebadge">● LIVE</span>':'';
+  pop.dataset.section=c.section||'';
+  pop.innerHTML=`<div class="poptitle">${c.title}${live}</div>
     <div class="cdesc">${c.desc}</div>${opts}
-    <button class="save" onclick="saveCard(this)">Save</button>`;
+    <button class="save" onclick="saveCard(this)">${c.section?'Apply':'Save'}</button>`;
+  // Pre-fill wired controls with the server's current live values.
+  const sect=c.section||'';
+  if(sect && STATE[sect]){
+    pop.querySelectorAll('[data-key]').forEach(el=>{
+      const k=el.dataset.key; if(!k||!(k in STATE[sect]))return;
+      const v=STATE[sect][k];
+      if(el.type==='checkbox') el.checked=!!v;
+      else { el.value=v; el.dispatchEvent(new Event('input')); }
+    });
+  }
   positionPop(tile);
   pop.classList.add('show');
 }
@@ -436,11 +452,48 @@ function closePanel(){panel.classList.remove('open');wheel.classList.remove('hid
 document.getElementById('back').addEventListener('click',closePanel);
 addEventListener('keydown',e=>{if(e.key==='Escape'&&panel.classList.contains('open'))closePanel()});
 
-function saveCard(btn){
-  btn.classList.add('saved');btn.textContent='✓ Saved';
+let STATE={};
+function loadState(){fetch('/api/state').then(r=>r.json()).then(s=>STATE=s||{}).catch(()=>{});}
+loadState();
+
+function toastMsg(m,bad){
+  toast.textContent=m;toast.style.background=bad?'#3a0014':'rgba(255,20,147,.92)';
+  toast.style.color=bad?'#ff8fbf':'#0a0006';
   toast.classList.add('show');
-  clearTimeout(window._tt);window._tt=setTimeout(()=>toast.classList.remove('show'),1400);
-  setTimeout(()=>{btn.classList.remove('saved');btn.textContent='Save'},1300);
+  clearTimeout(window._tt);window._tt=setTimeout(()=>toast.classList.remove('show'),1900);
+}
+function flashSaved(btn,label){btn.classList.add('saved');btn.textContent='✓ '+(label||'Saved');
+  setTimeout(()=>{btn.classList.remove('saved');btn.textContent=pop.dataset.section?'Apply':'Save'},1400);}
+
+async function saveCard(btn){
+  const section=pop.dataset.section||'';
+  if(!section){ // not wired — this one runs as a Discord command
+    flashSaved(btn,'Saved');
+    toastMsg('This one runs as a Discord command — saved locally.');
+    return;
+  }
+  const values={};
+  pop.querySelectorAll('[data-key]').forEach(el=>{
+    const k=el.dataset.key; if(!k) return;
+    if(el.type==='checkbox') values[k]=el.checked?1:0;
+    else if(el.type==='range'||el.type==='number') values[k]=Number(el.value);
+    else values[k]=el.value;
+  });
+  let key=localStorage.getItem('avaKey')||'';
+  if(!key){ key=prompt('Enter the dashboard admin key (DASHBOARD_KEY from your .env):')||'';
+    if(key) localStorage.setItem('avaKey',key); else return; }
+  btn.textContent='Applying…';
+  try{
+    const r=await fetch('/api/apply',{method:'POST',
+      headers:{'Content-Type':'application/json','X-Ava-Key':key},
+      body:JSON.stringify({section,values})});
+    const j=await r.json().catch(()=>({}));
+    if(r.ok && j.ok){ flashSaved(btn,'Applied'); toastMsg(j.message||'Applied to Discord ✓'); loadState(); }
+    else{
+      if(r.status===401) localStorage.removeItem('avaKey');
+      btn.textContent='Apply'; toastMsg('❌ '+(j.error||'Failed'),true);
+    }
+  }catch(e){ btn.textContent='Apply'; toastMsg('❌ Could not reach the server',true); }
 }
 window.saveCard=saveCard;
 </script>

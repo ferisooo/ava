@@ -57,7 +57,7 @@ class AvaBot(commands.Bot):
         if port:
             from .dashboard import start as start_dashboard
 
-            self._dashboard_runner = await start_dashboard(port)
+            self._dashboard_runner = await start_dashboard(port, self)
 
     async def _sync_commands(self) -> None:
         """Instant per-guild sync so new commands appear immediately on restart.
