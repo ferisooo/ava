@@ -388,7 +388,21 @@ function openPanel(key){
 function toggleAcc(btn){
   const acc=btn.parentElement, body=btn.nextElementSibling;
   const open=acc.classList.toggle('open');
-  body.style.maxHeight = open ? body.scrollHeight + 'px' : '';
+  if(open){
+    body.style.maxHeight = body.scrollHeight + 'px';
+    // After the open transition, release the cap so nothing can be clipped
+    // (and so controls below the fold stay clickable).
+    body.addEventListener('transitionend', function te(e){
+      if(e.propertyName==='max-height' && acc.classList.contains('open')){
+        body.style.maxHeight='none';
+        body.removeEventListener('transitionend',te);
+      }
+    });
+  }else{
+    // Going from 'none' back to 0 needs an explicit start height to animate.
+    body.style.maxHeight = body.scrollHeight + 'px';
+    requestAnimationFrame(()=>{ body.style.maxHeight=''; });
+  }
 }
 window.toggleAcc=toggleAcc;
 function closePanel(){panel.classList.remove('open');wheel.classList.remove('hidden');
