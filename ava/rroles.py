@@ -105,3 +105,75 @@ async def add_role_entry(
     except discord.HTTPException:
         pass
     return message, role
+
+
+async def _panel_message(
+    channel: discord.TextChannel,
+) -> discord.Message | None:
+    panel = store.get_rr_panel(channel.id)
+    if not panel:
+        return None
+    try:
+        return await channel.fetch_message(panel["message_id"])
+    except discord.NotFound:
+        return None
+
+
+async def refresh_panel(channel: discord.TextChannel) -> None:
+    """Re-render the panel message, or delete it if no entries remain."""
+    message = await _panel_message(channel)
+    if message is None:
+        return
+    entries = store.list_message_reaction_roles(message.id)
+    if entries:
+        await message.edit(content=render_panel(entries))
+    else:
+        try:
+            await message.delete()
+        except discord.HTTPException:
+            pass
+        store.remove_rr_panel(channel.id)
+
+
+async def remove_role_entry(channel: discord.TextChannel, emoji: str) -> None:
+    message = await _panel_message(channel)
+    if message is None:
+        raise ValueError("No reaction-role panel in that channel.")
+    store.remove_reaction_role(message.id, emoji)
+    try:
+        await message.clear_reaction(discord.PartialEmoji.from_str(emoji))
+    except discord.HTTPException:
+        pass
+    await refresh_panel(channel)
+
+
+async def remove_category(channel: discord.TextChannel, category: str) -> None:
+    message = await _panel_message(channel)
+    if message is None:
+        raise ValueError("No reaction-role panel in that channel.")
+    for e in store.list_category_reaction_roles(message.id, category):
+        store.remove_reaction_role(message.id, e["emoji"])
+        try:
+            await message.clear_reaction(discord.PartialEmoji.from_str(e["emoji"]))
+        except discord.HTTPException:
+            pass
+    await refresh_panel(channel)
+
+
+async def edit_category(
+    channel: discord.TextChannel,
+    category: str,
+    new_category: str,
+    exclusive: bool,
+) -> None:
+    message = await _panel_message(channel)
+    if message is None:
+        raise ValueError("No reaction-role panel in that channel.")
+    new_category = new_category.strip() or category
+    for e in store.list_category_reaction_roles(message.id, category):
+        # Same (message_id, emoji) primary key -> updates the row in place.
+        store.add_reaction_role(
+            e["guild_id"], message.id, e["emoji"], e["role_id"],
+            channel.id, new_category, 1 if exclusive else 0,
+        )
+    await refresh_panel(channel)

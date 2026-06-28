@@ -69,6 +69,29 @@ async def _state(request: web.Request) -> web.StreamResponse:
     )
 
 
+async def _rr_list(request: web.Request) -> web.StreamResponse:
+    bot = request.app["bot"]
+    guild = _target_guild(bot)
+    ch_id = request.query.get("channel", "")
+    if guild is None or not ch_id.isdigit():
+        return web.json_response({"entries": []})
+    panel = store.get_rr_panel(int(ch_id))
+    if not panel:
+        return web.json_response({"entries": []})
+    out = []
+    for e in store.list_message_reaction_roles(panel["message_id"]):
+        role = guild.get_role(e["role_id"])
+        out.append(
+            {
+                "emoji": e["emoji"],
+                "role_name": role.name if role else "deleted role",
+                "category": e["category"] or "Roles",
+                "exclusive": e["exclusive"],
+            }
+        )
+    return web.json_response({"entries": out})
+
+
 async def _apply(request: web.Request) -> web.StreamResponse:
     if not _key_configured():
         return web.json_response(
@@ -150,6 +173,29 @@ async def _apply_section(guild: discord.Guild, section: str, values: dict) -> st
         mode = "pick one" if exclusive else "pick any"
         return f"Added {role.name} ({emoji}) to #{channel.name} under “{category}” ({mode})."
 
+    if section in ("rr_delete_role", "rr_delete_category", "rr_edit_category"):
+        from . import rroles
+
+        channel = rroles.resolve_channel(guild, values.get("channel", ""))
+        if channel is None:
+            raise ValueError("Couldn't find that channel.")
+        try:
+            if section == "rr_delete_role":
+                await rroles.remove_role_entry(channel, str(values.get("emoji", "")))
+                return "Removed that role from the panel."
+            if section == "rr_delete_category":
+                await rroles.remove_category(channel, str(values.get("category", "")))
+                return "Removed that category."
+            await rroles.edit_category(
+                channel,
+                str(values.get("category", "")),
+                str(values.get("new_category", "")),
+                bool(int(values.get("exclusive", 0) or 0)),
+            )
+            return "Category updated."
+        except discord.Forbidden:
+            raise ValueError("I need Manage Roles + Manage Messages for that.")
+
     raise ValueError("This control isn't wired to live settings yet.")
 
 
@@ -159,6 +205,7 @@ def create_app(bot) -> web.Application:
     app.router.add_get("/", _index)
     app.router.add_get("/health", _health)
     app.router.add_get("/api/state", _state)
+    app.router.add_get("/api/rr", _rr_list)
     app.router.add_post("/api/apply", _apply)
     return app
 

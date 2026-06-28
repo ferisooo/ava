@@ -194,6 +194,24 @@
     box-shadow:var(--glow);transform:scale(1.1)}
   .emoji-btn img{width:22px;height:22px;vertical-align:middle}
 
+  /* reaction-role manager */
+  .rr-list{margin:6px 0 4px;display:flex;flex-direction:column;gap:8px}
+  .rr-empty{color:#caa9bb;font-size:12.5px;font-style:italic}
+  .rr-divider{height:1px;background:rgba(255,20,147,.25);margin:12px 0}
+  .rr-formtitle{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--green);margin-bottom:6px}
+  .rr-catbox{border:1px solid rgba(255,20,147,.22);border-radius:10px;padding:8px 10px;background:rgba(0,0,0,.3)}
+  .rr-cathead{display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:6px}
+  .rr-cathead b{color:#fff}
+  .rr-mode{font-size:10px;color:var(--pink-bright);opacity:.8}
+  .rr-cathead .rr-edit-cat{margin-left:auto}
+  .rr-row{display:flex;align-items:center;gap:8px;font-size:13px;padding:3px 0;color:#e7c6d8}
+  .rr-rolename{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rr-emoji,.rr-emoji-img{font-size:16px}
+  .rr-emoji-img{width:18px;height:18px;vertical-align:middle}
+  .rr-mini{background:none;border:1px solid transparent;border-radius:6px;cursor:none;
+    font-size:13px;line-height:1;padding:3px 5px;color:#fff;transition:background .2s,border-color .2s}
+  .rr-mini:hover{background:rgba(255,20,147,.18);border-color:var(--pink)}
+
   /* toggle */
   .sw{position:relative;display:inline-flex;align-items:center;gap:10px;cursor:none}
   .sw input{display:none}
@@ -463,6 +481,7 @@ function openPop(tile, c){
   if(activeTile===tile){closePop();return;}
   closePop();
   activeTile=tile; tile.classList.add('active');
+  if(c.section==='reactionrole'){ renderRR(c); positionPop(tile); pop.classList.add('show'); return; }
   const opts=c.opts.length?c.opts.map(control).join(''):'';
   const live=c.section?'<span class="livebadge">● LIVE</span>':'';
   pop.dataset.section=c.section||'';
@@ -567,6 +586,108 @@ async function saveCard(btn){
   }catch(e){ btn.textContent='Apply'; toastMsg('❌ Could not reach the server',true); }
 }
 window.saveCard=saveCard;
+
+/* ---------------- Reaction-role manager ---------------- */
+function renderEmoji(v){
+  const m=String(v).match(/<a?:\w+:(\d+)>/);
+  if(m){const an=String(v).startsWith('<a:');
+    return `<img class="rr-emoji-img" src="https://cdn.discordapp.com/emojis/${m[1]}.${an?'gif':'png'}?size=24">`;}
+  return v;
+}
+function renderRR(c){
+  const chs=(STATE.channels||[]);
+  const chOpts=['<option value="">— select a channel —</option>']
+    .concat(chs.map(x=>`<option value="${x.id}">#${x.name}</option>`)).join('');
+  pop.dataset.section='reactionrole';
+  pop.innerHTML=`<div class="poptitle">${c.title}<span class="livebadge">● LIVE</span></div>
+    <div class="cdesc">${c.desc}</div>
+    <div class="opt"><label>Channel</label><select class="rr-ch">${chOpts}</select></div>
+    <div class="rr-list">Pick a channel to manage its roles.</div>
+    <div class="rr-divider"></div>
+    <div class="rr-formtitle" data-formtitle>Add a role</div>
+    <div class="opt"><label>Role name</label><input type="text" class="rr-role" placeholder="Role name"></div>
+    <div class="opt"><label>Category</label><input type="text" class="rr-cat" placeholder="Category"></div>
+    ${control({t:'emoji',l:'Emoji',key:''})}
+    <div class="opt"><label>Only one per category</label>
+      <label class="sw"><input type="checkbox" class="rr-excl"><span class="track"></span></label></div>
+    <button class="save rr-add" data-mode="add">Add role</button>`;
+  pop.querySelector('.rr-ch').addEventListener('change',loadRRList);
+}
+async function loadRRList(){
+  const sel=pop.querySelector('.rr-ch'); if(!sel)return;
+  const list=pop.querySelector('.rr-list'); const ch=sel.value;
+  if(!ch){ list.innerHTML='Pick a channel to manage its roles.'; return; }
+  list.innerHTML='Loading…';
+  try{
+    const j=await (await fetch('/api/rr?channel='+encodeURIComponent(ch))).json();
+    const entries=j.entries||[];
+    if(!entries.length){ list.innerHTML='<div class="rr-empty">No reaction roles in this channel yet.</div>'; return; }
+    const cats={},order=[];
+    entries.forEach(e=>{const k=e.category||'Roles'; if(!(k in cats)){cats[k]=[];order.push(k);} cats[k].push(e);});
+    list.innerHTML=order.map(cat=>{
+      const ex=cats[cat].some(e=>e.exclusive);
+      const rows=cats[cat].map(e=>`<div class="rr-row">
+        <span class="rr-emoji">${renderEmoji(e.emoji)}</span>
+        <span class="rr-rolename">${e.role_name}</span>
+        <button class="rr-mini rr-edit-role" data-emoji="${e.emoji}" data-role="${e.role_name}" data-cat="${cat}" data-excl="${e.exclusive}">✏️</button>
+        <button class="rr-mini rr-del-role" data-emoji="${e.emoji}">🗑️</button></div>`).join('');
+      return `<div class="rr-catbox"><div class="rr-cathead">
+        <b>${cat}</b><span class="rr-mode">${ex?'pick one':'pick any'}</span>
+        <button class="rr-mini rr-edit-cat" data-cat="${cat}" data-excl="${ex?1:0}">✏️</button>
+        <button class="rr-mini rr-del-cat" data-cat="${cat}">🗑️</button></div>${rows}</div>`;
+    }).join('');
+  }catch(e){ list.innerHTML='Failed to load.'; }
+}
+async function rrApply(section,values){
+  let key=localStorage.getItem('avaKey')||'';
+  if(!key){ key=prompt('Enter the dashboard admin key (DASHBOARD_KEY):')||''; if(key)localStorage.setItem('avaKey',key); else return false; }
+  const r=await fetch('/api/apply',{method:'POST',headers:{'Content-Type':'application/json','X-Ava-Key':key},
+    body:JSON.stringify({section,values})});
+  const j=await r.json().catch(()=>({}));
+  if(r.ok&&j.ok){ toastMsg(j.message||'Done ✓'); return true; }
+  if(r.status===401) localStorage.removeItem('avaKey');
+  toastMsg('❌ '+(j.error||'Failed'),true); return false;
+}
+pop.addEventListener('click', async e=>{
+  const chV=()=>pop.querySelector('.rr-ch')?pop.querySelector('.rr-ch').value:'';
+  const add=e.target.closest('.rr-add');
+  if(add){
+    const channel=chV(), role=pop.querySelector('.rr-role').value.trim(),
+      cat=pop.querySelector('.rr-cat').value.trim()||'Roles',
+      emoji=pop.querySelector('.emoji-val').value, excl=pop.querySelector('.rr-excl').checked?1:0;
+    if(!channel||!role||!emoji){ toastMsg('❌ Channel, role name, and emoji are required',true); return; }
+    if(add.dataset.mode==='edit'&&add.dataset.oldemoji&&add.dataset.oldemoji!==emoji)
+      await rrApply('rr_delete_role',{channel,emoji:add.dataset.oldemoji});
+    if(await rrApply('reactionrole',{channel,role_name:role,category:cat,emoji,exclusive:excl})){
+      pop.querySelector('.rr-role').value=''; pop.querySelector('.emoji-val').value='';
+      pop.querySelectorAll('.emoji-btn.sel').forEach(x=>x.classList.remove('sel'));
+      const pk=pop.querySelector('[data-pick]'); if(pk)pk.innerHTML='';
+      add.dataset.mode='add'; delete add.dataset.oldemoji; add.textContent='Add role';
+      pop.querySelector('[data-formtitle]').textContent='Add a role'; loadRRList();
+    }
+    return;
+  }
+  const dr=e.target.closest('.rr-del-role');
+  if(dr){ if(await rrApply('rr_delete_role',{channel:chV(),emoji:dr.dataset.emoji})) loadRRList(); return; }
+  const dc=e.target.closest('.rr-del-cat');
+  if(dc){ if(confirm('Delete the whole "'+dc.dataset.cat+'" category and its roles?'))
+    if(await rrApply('rr_delete_category',{channel:chV(),category:dc.dataset.cat})) loadRRList(); return; }
+  const ecb=e.target.closest('.rr-edit-cat');
+  if(ecb){ const nn=prompt('Rename category to:',ecb.dataset.cat); if(nn===null)return;
+    const one=confirm('OK = pick ONE per category   ·   Cancel = pick ANY');
+    if(await rrApply('rr_edit_category',{channel:chV(),category:ecb.dataset.cat,new_category:nn.trim()||ecb.dataset.cat,exclusive:one?1:0})) loadRRList(); return; }
+  const er=e.target.closest('.rr-edit-role');
+  if(er){
+    pop.querySelector('.rr-role').value=er.dataset.role;
+    pop.querySelector('.rr-cat').value=er.dataset.cat;
+    pop.querySelector('.emoji-val').value=er.dataset.emoji;
+    pop.querySelector('.rr-excl').checked=er.dataset.excl==='1';
+    const pk=pop.querySelector('[data-pick]'); if(pk)pk.innerHTML=renderEmoji(er.dataset.emoji);
+    const a=pop.querySelector('.rr-add'); a.dataset.mode='edit'; a.dataset.oldemoji=er.dataset.emoji;
+    a.textContent='Update role'; pop.querySelector('[data-formtitle]').textContent='Edit role';
+    return;
+  }
+});
 </script>
 </body>
 </html>

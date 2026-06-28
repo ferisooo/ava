@@ -392,6 +392,11 @@ def get_rr_panel(channel_id: int) -> Optional[dict[str, Any]]:
         return dict(row) if row else None
 
 
+def remove_rr_panel(channel_id: int) -> None:
+    with _conn() as conn:
+        conn.execute("DELETE FROM rr_panels WHERE channel_id = ?", (channel_id,))
+
+
 def list_reaction_roles(guild_id: int) -> list[dict[str, Any]]:
     with _conn() as conn:
         return [
