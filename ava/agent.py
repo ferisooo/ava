@@ -376,12 +376,21 @@ async def run_agent(
     api_key: str,
     model: str,
     base_url: str,
+    history: list[dict[str, str]] | None = None,
 ) -> str:
-    """Run the tool-calling loop and return Ava's final reply text."""
+    """Run the tool-calling loop and return Ava's final reply text.
+
+    ``history`` is the recent plain-text back-and-forth in this channel
+    (user/assistant turns only) so short replies like "yes" keep their
+    context — e.g. confirming a clarifying question Ava just asked.
+    """
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": SYSTEM_PROMPT.format(context=_guild_context(guild))},
-        {"role": "user", "content": request},
     ]
+    for turn in history or []:
+        if turn.get("role") in ("user", "assistant") and turn.get("content"):
+            messages.append({"role": turn["role"], "content": turn["content"]})
+    messages.append({"role": "user", "content": request})
     timeout = aiohttp.ClientTimeout(total=120)
     try:
         async with aiohttp.ClientSession(timeout=timeout) as session:

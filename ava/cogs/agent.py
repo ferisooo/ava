@@ -16,10 +16,16 @@ log = logging.getLogger("ava.agent.cog")
 class Agent(commands.Cog):
     """Talk to Ava in plain English; she performs the matching server action."""
 
+    # Keep the last few exchanges per channel so follow-ups like "yes" keep
+    # their context. (text only — tool calls aren't replayed.)
+    HISTORY_TURNS = 6
+
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         # Guild IDs with an agent run in progress, so requests don't overlap.
         self._busy: set[int] = set()
+        # channel id -> recent [{role, content}] turns.
+        self._history: dict[int, list[dict[str, str]]] = {}
 
     def _strip_mention(self, message: discord.Message) -> str:
         content = message.content
@@ -87,6 +93,7 @@ class Agent(commands.Cog):
             return
 
         cfg = self.bot.config
+        history = self._history.get(message.channel.id, [])
         self._busy.add(message.guild.id)
         try:
             async with message.channel.typing():
@@ -96,6 +103,7 @@ class Agent(commands.Cog):
                     api_key=cfg.deepseek_api_key,
                     model=cfg.deepseek_agent_model,
                     base_url=cfg.deepseek_base_url,
+                    history=history,
                 )
         except AgentError as exc:
             reply = f"❌ {exc}"
@@ -105,7 +113,15 @@ class Agent(commands.Cog):
         finally:
             self._busy.discard(message.guild.id)
 
+        self._remember(message.channel.id, request, reply)
         await message.reply(reply[:2000], mention_author=False)
+
+    def _remember(self, channel_id: int, request: str, reply: str) -> None:
+        turns = self._history.setdefault(channel_id, [])
+        turns.append({"role": "user", "content": request})
+        turns.append({"role": "assistant", "content": reply})
+        # Keep only the most recent N turns to bound context and memory.
+        del turns[: -self.HISTORY_TURNS]
 
 
 async def setup(bot: commands.Bot) -> None:
