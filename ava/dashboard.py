@@ -20,7 +20,9 @@ _HTML_PATH = Path(__file__).parent / "web" / "dashboard.html"
 async def _index(_request: web.Request) -> web.StreamResponse:
     # Read per-request so the page can be edited without restarting.
     return web.Response(
-        text=_HTML_PATH.read_text(encoding="utf-8"), content_type="text/html"
+        text=_HTML_PATH.read_text(encoding="utf-8"),
+        content_type="text/html",
+        headers={"Cache-Control": "no-store, max-age=0"},
     )
 
 
