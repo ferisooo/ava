@@ -62,6 +62,17 @@ class AutoMod(commands.Cog):
         return len(self._msg_times[key]) >= cfg["spam_count"]
 
     @staticmethod
+    def _has_blocked_word(text: str, words: list[str]) -> bool:
+        low = text.lower()
+        for w in words:
+            if not w:
+                continue
+            # Whole-word / phrase match so "class" doesn't trip a block on "ass".
+            if re.search(r"(?<!\w)" + re.escape(w) + r"(?!\w)", low):
+                return True
+        return False
+
+    @staticmethod
     def _is_shouting(text: str, cfg: dict[str, int]) -> bool:
         letters = [c for c in text if c.isalpha()]
         if len(letters) < cfg["caps_min_len"]:
@@ -80,6 +91,10 @@ class AutoMod(commands.Cog):
             return "mass-mention"
         if cfg["block_caps"] and self._is_shouting(content, cfg):
             return "caps"
+        if cfg.get("block_keywords") and content:
+            words = store.list_blocked_keywords(message.guild.id)  # type: ignore[union-attr]
+            if words and self._has_blocked_word(content, words):
+                return "blocked-word"
         if cfg["block_spam"] and self._is_spam((message.guild.id, message.author.id), cfg):  # type: ignore[union-attr]
             return "spam"
         return None
@@ -234,6 +249,7 @@ class AutoMod(commands.Cog):
             return "on" if v else "off"
 
         alert = f"<#{c['alert_channel_id']}>" if c["alert_channel_id"] else "system channel"
+        kw_count = len(store.list_blocked_keywords(interaction.guild.id))  # type: ignore[union-attr]
         embed = discord.Embed(title=f"{on} Auto-mod", colour=discord.Colour.blurple())
         embed.add_field(
             name="Message filters",
@@ -242,6 +258,7 @@ class AutoMod(commands.Cog):
                 f"Mass mentions: {yn(c['block_mass_mentions'])} (> {c['mention_limit']})\n"
                 f"Spam: {yn(c['block_spam'])} ({c['spam_count']}/{c['spam_seconds']}s)\n"
                 f"Caps: {yn(c['block_caps'])} (≥ {c['caps_percent']}%)\n"
+                f"Blocked words: {yn(c.get('block_keywords', 0))} ({kw_count} on list)\n"
                 f"Escalate: {c['escalate_strikes']} hits/60s → mute {c['escalate_minutes']}m"
             ),
             inline=False,
@@ -264,6 +281,7 @@ class AutoMod(commands.Cog):
         mention_limit="Mentions allowed before it's blocked.",
         spam="Block message-rate spam.",
         caps="Block excessive caps.",
+        blocked_words="Block messages containing your filtered keywords.",
         escalate_strikes="Auto-mod hits within 60s before a timeout.",
         escalate_minutes="How long the auto timeout lasts.",
     )
@@ -276,6 +294,7 @@ class AutoMod(commands.Cog):
         mention_limit: Optional[app_commands.Range[int, 1, 50]] = None,
         spam: Optional[bool] = None,
         caps: Optional[bool] = None,
+        blocked_words: Optional[bool] = None,
         escalate_strikes: Optional[app_commands.Range[int, 1, 20]] = None,
         escalate_minutes: Optional[app_commands.Range[int, 1, 40320]] = None,
     ) -> None:
@@ -290,6 +309,8 @@ class AutoMod(commands.Cog):
             store.set_automod(gid, "block_spam", int(spam))
         if caps is not None:
             store.set_automod(gid, "block_caps", int(caps))
+        if blocked_words is not None:
+            store.set_automod(gid, "block_keywords", int(blocked_words))
         if escalate_strikes is not None:
             store.set_automod(gid, "escalate_strikes", escalate_strikes)
         if escalate_minutes is not None:

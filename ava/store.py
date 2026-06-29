@@ -33,6 +33,7 @@ AUTOMOD_DEFAULTS = {
     "block_caps": 1,            # delete excessive-caps messages
     "caps_min_len": 10,         # only check messages at least this long
     "caps_percent": 70,         # % uppercase to count as shouting
+    "block_keywords": 1,        # delete messages containing blocked words/phrases
     "escalate_strikes": 3,      # auto-mod hits...
     "escalate_minutes": 10,     # ...within 60s -> timeout this long
     "raid_enabled": 1,          # detect mass joins
@@ -83,6 +84,14 @@ def init() -> None:
         conn.execute(
             f"CREATE TABLE IF NOT EXISTS automod (guild_id INTEGER PRIMARY KEY, {automod_cols})"
         )
+        # Add any newly-introduced auto-mod columns to older databases.
+        for key, default in AUTOMOD_DEFAULTS.items():
+            try:
+                conn.execute(
+                    f"ALTER TABLE automod ADD COLUMN {key} INTEGER NOT NULL DEFAULT {int(default)}"
+                )
+            except sqlite3.OperationalError:
+                pass
         # Migrate older reaction_roles tables that predate the panel columns.
         for col, ddl in (
             ("channel_id", "INTEGER NOT NULL DEFAULT 0"),
@@ -140,6 +149,11 @@ def init() -> None:
                 user_id INTEGER NOT NULL,
                 content TEXT NOT NULL,
                 created_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS blocked_keywords (
+                guild_id INTEGER NOT NULL,
+                word TEXT NOT NULL,
+                PRIMARY KEY (guild_id, word)
             );
             """
         )
@@ -296,6 +310,41 @@ def set_automod(guild_id: int, key: str, value: int) -> None:
             f"INSERT OR REPLACE INTO automod ({columns}) VALUES ({placeholders})",
             [guild_id] + [current[k] for k in keys],
         )
+
+
+# ---- Blocked keywords -------------------------------------------------------
+
+def list_blocked_keywords(guild_id: int) -> list[str]:
+    with _conn() as conn:
+        return [
+            r["word"]
+            for r in conn.execute(
+                "SELECT word FROM blocked_keywords WHERE guild_id = ? ORDER BY word",
+                (guild_id,),
+            ).fetchall()
+        ]
+
+
+def add_blocked_keyword(guild_id: int, word: str) -> bool:
+    """Add a word/phrase (stored lowercased). Returns True if it was new."""
+    word = word.strip().lower()
+    if not word:
+        return False
+    with _conn() as conn:
+        cur = conn.execute(
+            "INSERT OR IGNORE INTO blocked_keywords (guild_id, word) VALUES (?, ?)",
+            (guild_id, word),
+        )
+        return cur.rowcount > 0
+
+
+def remove_blocked_keyword(guild_id: int, word: str) -> bool:
+    with _conn() as conn:
+        cur = conn.execute(
+            "DELETE FROM blocked_keywords WHERE guild_id = ? AND word = ?",
+            (guild_id, word.strip().lower()),
+        )
+        return cur.rowcount > 0
 
 
 # ---- Reaction roles ---------------------------------------------------------

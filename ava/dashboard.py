@@ -11,12 +11,13 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from pathlib import Path
 
 import discord
 from aiohttp import web
 
-from . import store
+from . import ai, store
 
 log = logging.getLogger("ava.dashboard")
 
@@ -59,6 +60,8 @@ async def _state(request: web.Request) -> web.StreamResponse:
             "key_required": _key_configured(),
             "automod": store.get_automod(guild.id),
             "warn": store.get_settings(guild.id),
+            "blocked_keywords": store.list_blocked_keywords(guild.id),
+            "deepseek": bool(getattr(getattr(bot, "config", None), "deepseek_api_key", "")),
             "channels": [
                 {"id": str(c.id), "name": c.name} for c in guild.text_channels
             ],
@@ -167,6 +170,23 @@ async def _apply_section(guild: discord.Guild, section: str, values: dict) -> st
         )
         return f"Security set to {preset['label']} (verification: {preset['verification'].name})."
 
+    if section == "kw_add":
+        raw = values.get("words", values.get("word", ""))
+        items = raw if isinstance(raw, list) else re.split(r"[,\n]", str(raw))
+        added = 0
+        for item in items:
+            if store.add_blocked_keyword(guild.id, str(item)):
+                added += 1
+        if added == 0:
+            raise ValueError("Nothing to add — those words are blank or already blocked.")
+        return f"Added {added} word{'s' if added != 1 else ''} to the blocklist."
+
+    if section == "kw_remove":
+        word = str(values.get("word", "")).strip()
+        if store.remove_blocked_keyword(guild.id, word):
+            return f"Removed “{word}” from the blocklist."
+        raise ValueError("That word wasn't on the blocklist.")
+
     if section == "reactionrole":
         from . import rroles
 
@@ -216,6 +236,54 @@ async def _apply_section(guild: discord.Guild, section: str, values: dict) -> st
     raise ValueError("This control isn't wired to live settings yet.")
 
 
+async def _suggest_keywords(request: web.Request) -> web.StreamResponse:
+    if not _key_configured():
+        return web.json_response(
+            {"ok": False, "error": "Writes are disabled — set DASHBOARD_KEY in the .env."},
+            status=403,
+        )
+    if not _check_key(request):
+        return web.json_response({"ok": False, "error": "Wrong admin key."}, status=401)
+    bot = request.app["bot"]
+    guild = _target_guild(bot)
+    if guild is None:
+        return web.json_response(
+            {"ok": False, "error": "Ava isn't in a server yet."}, status=400
+        )
+    cfg = getattr(bot, "config", None)
+    if cfg is None or not cfg.deepseek_api_key:
+        return web.json_response(
+            {"ok": False, "error": "DeepSeek isn't configured — set DEEPSEEK_API_KEY in the .env."},
+            status=400,
+        )
+    try:
+        data = await request.json()
+    except Exception:
+        data = {}
+    seeds = data.get("seeds") or []
+    if isinstance(seeds, str):
+        seeds = [seeds]
+    seeds = [str(s).strip() for s in seeds if str(s).strip()]
+    if not seeds:
+        seeds = store.list_blocked_keywords(guild.id)
+    if not seeds:
+        return web.json_response(
+            {"ok": False, "error": "Add at least one word first, then ask for suggestions."},
+            status=400,
+        )
+    try:
+        suggestions = await ai.suggest_similar_words(
+            seeds,
+            api_key=cfg.deepseek_api_key,
+            model=cfg.deepseek_agent_model,
+            base_url=cfg.deepseek_base_url,
+            existing=store.list_blocked_keywords(guild.id),
+        )
+    except ai.DeepSeekError as exc:
+        return web.json_response({"ok": False, "error": str(exc)}, status=502)
+    return web.json_response({"ok": True, "suggestions": suggestions})
+
+
 def create_app(bot) -> web.Application:
     app = web.Application()
     app["bot"] = bot
@@ -224,6 +292,7 @@ def create_app(bot) -> web.Application:
     app.router.add_get("/api/state", _state)
     app.router.add_get("/api/rr", _rr_list)
     app.router.add_post("/api/apply", _apply)
+    app.router.add_post("/api/suggest_keywords", _suggest_keywords)
     return app
 
 

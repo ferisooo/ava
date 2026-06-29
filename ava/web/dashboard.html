@@ -212,6 +212,25 @@
     font-size:13px;line-height:1;padding:3px 5px;color:#fff;transition:background .2s,border-color .2s}
   .rr-mini:hover{background:rgba(255,20,147,.18);border-color:var(--pink)}
 
+  /* keyword filter */
+  .kw-actions{display:flex;gap:8px;align-items:center;margin-top:2px}
+  .kw-actions .kw-add{flex:0 0 auto;margin:0}
+  .kw-suggest{background:rgba(255,20,147,.10);border:1px solid var(--pink);border-radius:8px;
+    cursor:none;color:#ffd6ea;font-size:12px;padding:7px 10px;transition:background .2s}
+  .kw-suggest:hover{background:rgba(255,20,147,.22)}
+  .kw-suggest:disabled{opacity:.6}
+  .kw-suggestions{margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .kw-sughint{flex-basis:100%;font-size:11px;color:#caa9bb;margin-bottom:2px}
+  .kw-sugbtn{background:rgba(255,255,255,.05);border:1px dashed var(--pink);border-radius:12px;
+    cursor:none;color:#ffd6ea;font-size:12px;padding:4px 9px;transition:background .2s}
+  .kw-sugbtn:hover{background:rgba(255,20,147,.2)}
+  .kw-list{margin-top:12px;display:flex;flex-wrap:wrap;gap:6px}
+  .kw-chip{display:inline-flex;align-items:center;gap:5px;background:rgba(255,20,147,.12);
+    border:1px solid rgba(255,20,147,.4);border-radius:12px;padding:4px 6px 4px 10px;
+    font-size:12.5px;color:#f3cde0}
+  .kw-del{background:none;border:none;cursor:none;color:#ff9fc6;font-size:12px;line-height:1;padding:0 2px}
+  .kw-del:hover{color:#fff}
+
   /* toggle */
   .sw{position:relative;display:inline-flex;align-items:center;gap:10px;cursor:none}
   .sw input{display:none}
@@ -290,6 +309,7 @@ const DATA = {
     {title:"Purge a User",cmd:"/purge user",desc:"Delete a specific user's messages.",opts:[{t:"text",l:"User"},{t:"number",l:"Limit per channel"}]},
     {title:"Warn a Member",cmd:"/warn add",desc:"Warn a member (auto-escalates at thresholds).",opts:[{t:"text",l:"Reason"}]},
     {title:"Warning Thresholds",cmd:"/warn config",section:"warn",desc:"Auto-mute then auto-kick at these warning counts. Live.",opts:[{t:"range",l:"Auto-mute at (warnings)",min:1,max:20,def:3,key:"warn_mute_threshold"},{t:"range",l:"Mute length (min)",min:1,max:1440,def:60,key:"warn_mute_minutes"},{t:"range",l:"Auto-kick at (warnings)",min:1,max:20,def:5,key:"warn_kick_threshold"}]},
+     {title:"Filtered Keywords",cmd:"/automod keywords",section:"keywords",desc:"Block words & phrases. Add your own, or let DeepSeek suggest similar ones. Live.",opts:[]},
     {title:"Kick",cmd:"/kick",desc:"Remove a member.",opts:[{t:"text",l:"Member"},{t:"text",l:"Reason"}]},
     {title:"Mute (timeout)",cmd:"/mute",desc:"Timeout a member.",opts:[{t:"text",l:"Member"},{t:"text",l:"Duration (10m, 1h, 1d)"},{t:"text",l:"Reason"}]},
     {title:"Temp Ban",cmd:"/tempban",desc:"Ban for a duration, then auto-unban.",opts:[{t:"text",l:"Member"},{t:"text",l:"Duration (1d, 7d)"}]},
@@ -482,6 +502,7 @@ function openPop(tile, c){
   closePop();
   activeTile=tile; tile.classList.add('active');
   if(c.section==='reactionrole'){ renderRR(c); positionPop(tile); pop.classList.add('show'); return; }
+  if(c.section==='keywords'){ renderKW(c); positionPop(tile); pop.classList.add('show'); return; }
   const opts=c.opts.length?c.opts.map(control).join(''):'';
   const live=c.section?'<span class="livebadge">● LIVE</span>':'';
   pop.dataset.section=c.section||'';
@@ -543,7 +564,7 @@ document.getElementById('back').addEventListener('click',closePanel);
 addEventListener('keydown',e=>{if(e.key==='Escape'&&panel.classList.contains('open'))closePanel()});
 
 let STATE={};
-function loadState(){fetch('/api/state').then(r=>r.json()).then(s=>STATE=s||{}).catch(()=>{});}
+function loadState(){return fetch('/api/state').then(r=>r.json()).then(s=>STATE=s||{}).catch(()=>{});}
 loadState();
 
 function toastMsg(m,bad){
@@ -690,6 +711,78 @@ pop.addEventListener('click', async e=>{
     const pk=pop.querySelector('[data-pick]'); if(pk)pk.innerHTML=renderEmoji(er.dataset.emoji);
     const a=pop.querySelector('.rr-add'); a.dataset.mode='edit'; a.dataset.oldemoji=er.dataset.emoji;
     a.textContent='Update role'; pop.querySelector('[data-formtitle]').textContent='Edit role';
+    return;
+  }
+});
+
+/* ---------------- Keyword filter manager ---------------- */
+function kwEsc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');}
+function kwWords(){return STATE.blocked_keywords||[];}
+function renderKW(c){
+  pop.dataset.section='keywords';
+  const am=STATE.automod||{};
+  pop.innerHTML=`<div class="poptitle">${c.title}<span class="livebadge">● LIVE</span></div>
+    <div class="cdesc">${c.desc}</div>
+    <div class="opt"><label>Auto-mod enabled</label>
+      <label class="sw"><input type="checkbox" class="kw-enabled" ${am.enabled?'checked':''}><span class="track"></span></label></div>
+    <div class="opt"><label>Block these words</label>
+      <label class="sw"><input type="checkbox" class="kw-on" ${am.block_keywords?'checked':''}><span class="track"></span></label></div>
+    <div class="rr-divider"></div>
+    <div class="rr-formtitle">Add a word or phrase</div>
+    <div class="opt"><input type="text" class="kw-input" placeholder="a word — or several, comma-separated"></div>
+    <div class="kw-actions">
+      <button class="save kw-add" data-mode="add">Add</button>
+      <button class="kw-suggest" type="button">✨ Suggest similar</button>
+    </div>
+    <div class="kw-suggestions"></div>
+    <div class="kw-list">Loading…</div>`;
+  pop.querySelector('.kw-enabled').addEventListener('change',async e=>{ if(await rrApply('automod',{enabled:e.target.checked?1:0})) loadState(); });
+  pop.querySelector('.kw-on').addEventListener('change',async e=>{ if(await rrApply('automod',{block_keywords:e.target.checked?1:0})) loadState(); });
+  pop.querySelector('.kw-input').addEventListener('keydown',e=>{ if(e.key==='Enter'){e.preventDefault(); pop.querySelector('.kw-add').click();} });
+  loadKWList();
+}
+function loadKWList(){
+  const list=pop.querySelector('.kw-list'); if(!list)return;
+  const words=kwWords();
+  if(!words.length){ list.innerHTML='<div class="rr-empty">No blocked words yet.</div>'; return; }
+  list.innerHTML=words.map(w=>`<span class="kw-chip">${kwEsc(w)}<button class="kw-del" data-w="${kwEsc(w)}" title="Remove">✕</button></span>`).join('');
+}
+pop.addEventListener('click', async e=>{
+  const add=e.target.closest('.kw-add');
+  if(add){
+    const inp=pop.querySelector('.kw-input'); const v=(inp.value||'').trim();
+    if(!v){ toastMsg('❌ Type a word first',true); return; }
+    if(await rrApply('kw_add',{words:v})){ inp.value=''; await loadState(); loadKWList(); }
+    return;
+  }
+  const del=e.target.closest('.kw-del');
+  if(del){ if(await rrApply('kw_remove',{word:del.dataset.w})){ await loadState(); loadKWList(); } return; }
+  const sb=e.target.closest('.kw-sugbtn');
+  if(sb){ if(await rrApply('kw_add',{words:sb.dataset.w})){ sb.remove(); await loadState(); loadKWList(); } return; }
+  const sug=e.target.closest('.kw-suggest');
+  if(sug){
+    const box=pop.querySelector('.kw-suggestions'), inp=pop.querySelector('.kw-input');
+    const seedRaw=(inp.value||'').trim();
+    const seeds=seedRaw?seedRaw.split(',').map(s=>s.trim()).filter(Boolean):kwWords();
+    if(!seeds.length){ toastMsg('❌ Add a word first, then suggest',true); return; }
+    if(STATE.deepseek===false){ toastMsg('❌ DeepSeek isn’t configured on the server',true); return; }
+    let key=localStorage.getItem('avaKey')||'';
+    if(!key){ key=prompt('Enter the dashboard admin key (DASHBOARD_KEY):')||''; if(key)localStorage.setItem('avaKey',key); else return; }
+    sug.disabled=true; sug.textContent='✨ Thinking…'; box.innerHTML='';
+    try{
+      const r=await fetch('/api/suggest_keywords',{method:'POST',headers:{'Content-Type':'application/json','X-Ava-Key':key},body:JSON.stringify({seeds})});
+      const j=await r.json().catch(()=>({}));
+      if(r.ok&&j.ok){
+        const sg=j.suggestions||[];
+        box.innerHTML = sg.length
+          ? '<div class="kw-sughint">Tap to add:</div>'+sg.map(w=>`<button type="button" class="kw-sugbtn" data-w="${kwEsc(w)}">+ ${kwEsc(w)}</button>`).join('')
+          : '<div class="rr-empty">No new suggestions.</div>';
+      }else{
+        if(r.status===401) localStorage.removeItem('avaKey');
+        toastMsg('❌ '+(j.error||'Failed'),true);
+      }
+    }catch(err){ toastMsg('❌ Could not reach the server',true); }
+    sug.disabled=false; sug.textContent='✨ Suggest similar';
     return;
   }
 });
