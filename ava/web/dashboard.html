@@ -608,7 +608,7 @@ function renderRR(c){
     <div class="rr-divider"></div>
     <div class="rr-formtitle" data-formtitle>Add a role</div>
     <div class="opt"><label>Role name</label><input type="text" class="rr-role" list="rr-rolelist" placeholder="Pick an existing role or type a new one"><datalist id="rr-rolelist">${roleList}</datalist></div>
-    <div class="opt"><label>Category</label><input type="text" class="rr-cat" placeholder="Category"></div>
+    <div class="opt"><label>Category</label><input type="text" class="rr-cat" list="rr-catlist" placeholder="Pick an existing category or type a new one"><datalist id="rr-catlist"></datalist></div>
     ${control({t:'emoji',l:'Emoji',key:''})}
     <div class="opt"><label>Only one per category</label>
       <label class="sw"><input type="checkbox" class="rr-excl"><span class="track"></span></label></div>
@@ -618,6 +618,7 @@ function renderRR(c){
 async function loadRRList(){
   const sel=pop.querySelector('.rr-ch'); if(!sel)return;
   const list=pop.querySelector('.rr-list'); const ch=sel.value;
+  const catlist=pop.querySelector('#rr-catlist'); if(catlist) catlist.innerHTML='';
   if(!ch){ list.innerHTML='Pick a channel to manage its roles.'; return; }
   list.innerHTML='Loading…';
   try{
@@ -626,6 +627,8 @@ async function loadRRList(){
     if(!entries.length){ list.innerHTML='<div class="rr-empty">No reaction roles in this channel yet.</div>'; return; }
     const cats={},order=[];
     entries.forEach(e=>{const k=e.category||'Roles'; if(!(k in cats)){cats[k]=[];order.push(k);} cats[k].push(e);});
+    const cl=pop.querySelector('#rr-catlist');
+    if(cl) cl.innerHTML=order.map(k=>`<option value="${k.replace(/"/g,'&quot;')}"></option>`).join('');
     list.innerHTML=order.map(cat=>{
       const ex=cats[cat].some(e=>e.exclusive);
       const rows=cats[cat].map(e=>`<div class="rr-row">
