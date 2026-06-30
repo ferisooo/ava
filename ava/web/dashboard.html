@@ -541,6 +541,7 @@ function positionPop(tile){
   }
   pop.style.left=left+'px';
   pop.style.top=top+'px';
+  pop.scrollTop=0;   // always open showing the top of the card
 }
 function closePop(){
   pop.classList.remove('show');
@@ -737,11 +738,6 @@ function renderKW(c){
   const tmins=Number(kc.timeout_minutes!=null?kc.timeout_minutes:10);
   pop.innerHTML=`<div class="poptitle">${c.title}<span class="livebadge">● LIVE</span></div>
     <div class="cdesc">${c.desc}</div>
-    <div class="opt"><label>Auto-mod enabled</label>
-      <label class="sw"><input type="checkbox" class="kw-enabled" ${am.enabled?'checked':''}><span class="track"></span></label></div>
-    <div class="opt"><label>Block these words</label>
-      <label class="sw"><input type="checkbox" class="kw-on" ${am.block_keywords?'checked':''}><span class="track"></span></label></div>
-    <div class="rr-divider"></div>
     <div class="rr-formtitle">Add a word or phrase</div>
     <div class="opt"><input type="text" class="kw-input" placeholder="a word — or several, comma-separated"></div>
     <div class="kw-actions">
@@ -750,6 +746,11 @@ function renderKW(c){
     </div>
     <div class="kw-suggestions"></div>
     <div class="kw-list">Loading…</div>
+    <div class="rr-divider"></div>
+    <div class="opt"><label>Auto-mod enabled</label>
+      <label class="sw"><input type="checkbox" class="kw-enabled" ${am.enabled?'checked':''}><span class="track"></span></label></div>
+    <div class="opt"><label>Block these words</label>
+      <label class="sw"><input type="checkbox" class="kw-on" ${am.block_keywords?'checked':''}><span class="track"></span></label></div>
     <div class="rr-divider"></div>
     <div class="rr-formtitle">When someone says a blocked word</div>
     <div class="opt"><label>Ava's reply — use {user} for their name</label>
