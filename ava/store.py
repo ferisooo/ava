@@ -155,6 +155,13 @@ def init() -> None:
                 word TEXT NOT NULL,
                 PRIMARY KEY (guild_id, word)
             );
+            CREATE TABLE IF NOT EXISTS keyword_config (
+                guild_id INTEGER PRIMARY KEY,
+                response TEXT NOT NULL,
+                strikes INTEGER NOT NULL,
+                action TEXT NOT NULL,
+                timeout_minutes INTEGER NOT NULL
+            );
             """
         )
 
@@ -221,6 +228,16 @@ def clear_warnings(guild_id: int, user_id: int) -> int:
             "DELETE FROM infractions "
             "WHERE guild_id = ? AND user_id = ? AND action = 'warn'",
             (guild_id, user_id),
+        )
+        return cur.rowcount
+
+
+def clear_infractions(guild_id: int, user_id: int, action: str) -> int:
+    with _conn() as conn:
+        cur = conn.execute(
+            "DELETE FROM infractions "
+            "WHERE guild_id = ? AND user_id = ? AND action = ?",
+            (guild_id, user_id, action),
         )
         return cur.rowcount
 
@@ -345,6 +362,49 @@ def remove_blocked_keyword(guild_id: int, word: str) -> bool:
             (guild_id, word.strip().lower()),
         )
         return cur.rowcount > 0
+
+
+# How Ava reacts when someone uses a blocked word. ``strikes`` = hits allowed
+# before ``action`` is applied (0 = just delete, never punish). ``action`` is
+# one of: none, timeout, kick, ban.
+KEYWORD_DEFAULTS = {
+    "response": "{user}, that word isn't allowed here.",
+    "strikes": 3,
+    "action": "timeout",
+    "timeout_minutes": 10,
+}
+_KEYWORD_ACTIONS = ("none", "timeout", "kick", "ban")
+
+
+def get_keyword_config(guild_id: int) -> dict[str, Any]:
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM keyword_config WHERE guild_id = ?", (guild_id,)
+        ).fetchone()
+    if row is None:
+        return dict(KEYWORD_DEFAULTS)
+    return {key: row[key] for key in KEYWORD_DEFAULTS}
+
+
+def set_keyword_config(guild_id: int, **fields: Any) -> None:
+    current = get_keyword_config(guild_id)
+    current.update({k: v for k, v in fields.items() if k in KEYWORD_DEFAULTS})
+    action = str(current["action"]).lower()
+    if action not in _KEYWORD_ACTIONS:
+        action = "none"
+    with _conn() as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO keyword_config "
+            "(guild_id, response, strikes, action, timeout_minutes) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (
+                guild_id,
+                str(current["response"]),
+                max(0, int(current["strikes"])),
+                action,
+                max(1, int(current["timeout_minutes"])),
+            ),
+        )
 
 
 # ---- Reaction roles ---------------------------------------------------------

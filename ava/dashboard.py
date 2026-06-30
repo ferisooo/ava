@@ -61,6 +61,7 @@ async def _state(request: web.Request) -> web.StreamResponse:
             "automod": store.get_automod(guild.id),
             "warn": store.get_settings(guild.id),
             "blocked_keywords": store.list_blocked_keywords(guild.id),
+            "keyword_config": store.get_keyword_config(guild.id),
             "deepseek": bool(getattr(getattr(bot, "config", None), "deepseek_api_key", "")),
             "channels": [
                 {"id": str(c.id), "name": c.name} for c in guild.text_channels
@@ -186,6 +187,22 @@ async def _apply_section(guild: discord.Guild, section: str, values: dict) -> st
         if store.remove_blocked_keyword(guild.id, word):
             return f"Removed “{word}” from the blocklist."
         raise ValueError("That word wasn't on the blocklist.")
+
+    if section == "kw_config":
+        fields: dict = {}
+        if "response" in values:
+            fields["response"] = str(values.get("response", ""))
+        if "strikes" in values:
+            fields["strikes"] = max(0, int(values.get("strikes") or 0))
+        if "action" in values:
+            action = str(values.get("action", "none")).lower()
+            if action not in ("none", "timeout", "kick", "ban"):
+                raise ValueError("Unknown punishment.")
+            fields["action"] = action
+        if "timeout_minutes" in values:
+            fields["timeout_minutes"] = max(1, int(values.get("timeout_minutes") or 1))
+        store.set_keyword_config(guild.id, **fields)
+        return "Saved how Ava responds to blocked words."
 
     if section == "reactionrole":
         from . import rroles

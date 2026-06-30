@@ -127,6 +127,12 @@ class AutoMod(commands.Cog):
         store.add_infraction(
             message.guild.id, member.id, self.bot.user.id, f"automod-{vtype}", "Auto-mod"
         )
+
+        # Blocked words have their own message + admin-chosen punishment ladder.
+        if vtype == "blocked-word":
+            await self._handle_blocked_word(message.guild, member, message.channel)
+            return
+
         try:
             await message.channel.send(
                 f"{member.mention} — that was auto-removed ({vtype.replace('-', ' ')}).",
@@ -136,6 +142,59 @@ class AutoMod(commands.Cog):
             pass
 
         await self._escalate(message.guild, member, cfg)
+
+    async def _handle_blocked_word(
+        self,
+        guild: discord.Guild,
+        member: discord.Member,
+        channel: "discord.abc.Messageable",
+    ) -> None:
+        kc = store.get_keyword_config(guild.id)
+        text = str(kc.get("response", "")).strip()
+        if text:
+            text = text.replace("{user}", member.mention).replace("{server}", guild.name)
+            try:
+                await channel.send(
+                    text,
+                    allowed_mentions=discord.AllowedMentions(
+                        users=True, roles=False, everyone=False
+                    ),
+                )
+            except discord.HTTPException:
+                pass
+
+        allowed = max(0, int(kc.get("strikes", 0) or 0))
+        action = str(kc.get("action", "none")).lower()
+        if action == "none":
+            return  # admin chose "just delete & warn" — never punish
+
+        # Count this user's blocked-word hits so far (the current one is already
+        # recorded). They get ``allowed`` free hits; the next one is punished.
+        hits = len(store.get_infractions(guild.id, member.id, action="automod-blocked-word"))
+        if hits <= allowed:
+            return
+
+        reason = f"Auto-mod: {hits} blocked-word violations"
+        try:
+            if action == "timeout":
+                minutes = int(kc.get("timeout_minutes", 10) or 10)
+                until = datetime.now(timezone.utc) + timedelta(minutes=minutes)
+                await member.timeout(until, reason=reason)
+            elif action == "kick":
+                await member.kick(reason=reason)
+            elif action == "ban":
+                await member.ban(reason=reason, delete_message_days=0)
+            else:
+                return
+        except discord.HTTPException:
+            return
+
+        # Counter restarts after the punishment lands.
+        store.clear_infractions(guild.id, member.id, "automod-blocked-word")
+        store.add_infraction(
+            guild.id, member.id, self.bot.user.id,
+            f"automod-blocked-word-{action}", reason,
+        )
 
     async def _escalate(
         self, guild: discord.Guild, member: discord.Member, cfg: dict[str, int]

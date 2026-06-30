@@ -167,10 +167,11 @@
   .opt{margin:11px 0}
   .opt label:not(.sw){display:block;font-size:11px;letter-spacing:.16em;text-transform:uppercase;
     color:var(--pink-bright);margin-bottom:6px;opacity:.85}
-  .opt input[type=text],.opt input[type=number],.opt select{width:100%;
+  .opt input[type=text],.opt input[type=number],.opt select,.opt textarea{width:100%;
     background:rgba(0,0,0,.6);border:1px solid rgba(255,20,147,.35);border-radius:9px;
     color:#fff;padding:9px 12px;font-size:13px;outline:none;transition:border-color .3s,box-shadow .3s}
-  .opt input:focus,.opt select:focus{border-color:var(--pink);box-shadow:var(--glow)}
+  .opt textarea{resize:vertical;min-height:38px;font-family:inherit;line-height:1.45}
+  .opt input:focus,.opt select:focus,.opt textarea:focus{border-color:var(--pink);box-shadow:var(--glow)}
   .opt select option{background:#0a0006}
 
   /* emoji grid picker */
@@ -224,6 +225,9 @@
   .kw-sugbtn{background:rgba(255,255,255,.05);border:1px dashed var(--pink);border-radius:12px;
     cursor:none;color:#ffd6ea;font-size:12px;padding:4px 9px;transition:background .2s}
   .kw-sugbtn:hover{background:rgba(255,20,147,.2)}
+  .kw-sugall{background:rgba(255,20,147,.22);border:1px solid var(--pink);border-radius:12px;
+    cursor:none;color:#fff;font-size:12px;font-weight:600;padding:4px 11px;transition:background .2s}
+  .kw-sugall:hover{background:rgba(255,20,147,.38)}
   .kw-list{margin-top:12px;display:flex;flex-wrap:wrap;gap:6px}
   .kw-chip{display:inline-flex;align-items:center;gap:5px;background:rgba(255,20,147,.12);
     border:1px solid rgba(255,20,147,.4);border-radius:12px;padding:4px 6px 4px 10px;
@@ -526,11 +530,17 @@ function positionPop(tile){
   const r=tile.getBoundingClientRect();
   const w=Math.min(340, innerWidth*0.92);
   let left=Math.max(10, Math.min(r.left, innerWidth - w - 10));
-  let top=r.bottom + 8;
+  const margin=12;
+  // Never taller than the viewport; measure the natural height under that cap.
+  pop.style.maxHeight=(innerHeight - margin*2)+'px';
+  const need=pop.offsetHeight;
+  let top=r.bottom + 8;                 // prefer just below the tile
+  if(top + need > innerHeight - margin){
+    const above=r.top - 8 - need;       // try opening upward instead
+    top = above >= margin ? above : Math.max(margin, innerHeight - margin - need);
+  }
   pop.style.left=left+'px';
   pop.style.top=top+'px';
-  // Cap height to the space below so it always fits and scrolls internally.
-  pop.style.maxHeight=Math.max(160, innerHeight - top - 16)+'px';
 }
 function closePop(){
   pop.classList.remove('show');
@@ -720,7 +730,11 @@ function kwEsc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').re
 function kwWords(){return STATE.blocked_keywords||[];}
 function renderKW(c){
   pop.dataset.section='keywords';
-  const am=STATE.automod||{};
+  const am=STATE.automod||{}, kc=STATE.keyword_config||{};
+  const act=kc.action||'timeout';
+  const aopt=(a,t)=>`<option value="${a}" ${act===a?'selected':''}>${t}</option>`;
+  const strikes=Number(kc.strikes!=null?kc.strikes:3);
+  const tmins=Number(kc.timeout_minutes!=null?kc.timeout_minutes:10);
   pop.innerHTML=`<div class="poptitle">${c.title}<span class="livebadge">● LIVE</span></div>
     <div class="cdesc">${c.desc}</div>
     <div class="opt"><label>Auto-mod enabled</label>
@@ -735,10 +749,29 @@ function renderKW(c){
       <button class="kw-suggest" type="button">✨ Suggest similar</button>
     </div>
     <div class="kw-suggestions"></div>
-    <div class="kw-list">Loading…</div>`;
+    <div class="kw-list">Loading…</div>
+    <div class="rr-divider"></div>
+    <div class="rr-formtitle">When someone says a blocked word</div>
+    <div class="opt"><label>Ava's reply — use {user} for their name</label>
+      <textarea class="kw-resp" rows="2" placeholder="Leave blank to stay silent">${kwEsc(kc.response||'')}</textarea></div>
+    <div class="opt"><label>Times allowed before punishment (0 = punish on first)</label>
+      <input type="number" class="kw-strikes" min="0" max="100" value="${strikes}"></div>
+    <div class="opt"><label>Punishment</label>
+      <select class="kw-action">
+        ${aopt('none','No punishment — just delete & warn')}
+        ${aopt('timeout','Timeout (mute)')}
+        ${aopt('kick','Kick from server')}
+        ${aopt('ban','Ban from server')}
+      </select></div>
+    <div class="opt kw-tmins-wrap"><label>Timeout length (minutes)</label>
+      <input type="number" class="kw-tmins" min="1" max="40320" value="${tmins}"></div>
+    <button class="save kw-saveconf">Save reply &amp; punishment</button>`;
   pop.querySelector('.kw-enabled').addEventListener('change',async e=>{ if(await rrApply('automod',{enabled:e.target.checked?1:0})) loadState(); });
   pop.querySelector('.kw-on').addEventListener('change',async e=>{ if(await rrApply('automod',{block_keywords:e.target.checked?1:0})) loadState(); });
   pop.querySelector('.kw-input').addEventListener('keydown',e=>{ if(e.key==='Enter'){e.preventDefault(); pop.querySelector('.kw-add').click();} });
+  const actSel=pop.querySelector('.kw-action'), tw=pop.querySelector('.kw-tmins-wrap');
+  const syncT=()=>{ tw.style.display = actSel.value==='timeout' ? '' : 'none'; };
+  actSel.addEventListener('change',syncT); syncT();
   loadKWList();
 }
 function loadKWList(){
@@ -759,6 +792,24 @@ pop.addEventListener('click', async e=>{
   if(del){ if(await rrApply('kw_remove',{word:del.dataset.w})){ await loadState(); loadKWList(); } return; }
   const sb=e.target.closest('.kw-sugbtn');
   if(sb){ if(await rrApply('kw_add',{words:sb.dataset.w})){ sb.remove(); await loadState(); loadKWList(); } return; }
+  const sall=e.target.closest('.kw-sugall');
+  if(sall){
+    const words=[...pop.querySelectorAll('.kw-sugbtn')].map(b=>b.dataset.w);
+    if(!words.length) return;
+    if(await rrApply('kw_add',{words})){ pop.querySelector('.kw-suggestions').innerHTML=''; await loadState(); loadKWList(); }
+    return;
+  }
+  const saveconf=e.target.closest('.kw-saveconf');
+  if(saveconf){
+    const vals={
+      response: pop.querySelector('.kw-resp').value,
+      strikes: Number(pop.querySelector('.kw-strikes').value||0),
+      action: pop.querySelector('.kw-action').value,
+      timeout_minutes: Number(pop.querySelector('.kw-tmins').value||10),
+    };
+    if(await rrApply('kw_config',vals)) loadState();
+    return;
+  }
   const sug=e.target.closest('.kw-suggest');
   if(sug){
     const box=pop.querySelector('.kw-suggestions'), inp=pop.querySelector('.kw-input');
@@ -775,7 +826,9 @@ pop.addEventListener('click', async e=>{
       if(r.ok&&j.ok){
         const sg=j.suggestions||[];
         box.innerHTML = sg.length
-          ? '<div class="kw-sughint">Tap to add:</div>'+sg.map(w=>`<button type="button" class="kw-sugbtn" data-w="${kwEsc(w)}">+ ${kwEsc(w)}</button>`).join('')
+          ? '<div class="kw-sughint">Tap one to add, or add them all:</div>'
+            +'<button type="button" class="kw-sugall">➕ Add all</button>'
+            +sg.map(w=>`<button type="button" class="kw-sugbtn" data-w="${kwEsc(w)}">+ ${kwEsc(w)}</button>`).join('')
           : '<div class="rr-empty">No new suggestions.</div>';
       }else{
         if(r.status===401) localStorage.removeItem('avaKey');
