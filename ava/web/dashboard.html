@@ -237,6 +237,24 @@
     font-size:12.5px;color:#f3cde0}
   .kw-del{flex:none;background:none;border:none;cursor:none;color:#ff9fc6;font-size:12px;line-height:1;padding:0 2px}
   .kw-del:hover{color:#fff}
+  .kw-toggle{width:100%;margin-top:14px;display:flex;align-items:center;gap:8px;
+    background:rgba(255,20,147,.08);border:1px solid rgba(255,20,147,.4);border-radius:10px;
+    cursor:none;color:#ffd6ea;font-size:13px;padding:10px 12px;transition:background .2s}
+  .kw-toggle:hover{background:rgba(255,20,147,.18)}
+  .kw-chev{display:inline-block;font-size:11px;transition:transform .2s}
+  .kw-toggle.open .kw-chev{transform:rotate(90deg)}
+  .kw-count{color:#fff;font-weight:600}
+  .kw-panel{margin-top:8px}
+  .kw-panel[hidden]{display:none}
+  .kw-search{width:100%;background:rgba(0,0,0,.6);border:1px solid rgba(255,20,147,.35);border-radius:9px;
+    color:#fff;padding:8px 11px;font-size:13px;outline:none;transition:border-color .3s,box-shadow .3s}
+  .kw-search:focus{border-color:var(--pink);box-shadow:var(--glow)}
+  .kw-pager{display:flex;align-items:center;justify-content:center;gap:12px;margin-top:10px}
+  .kw-page-btn{background:rgba(255,20,147,.1);border:1px solid var(--pink);border-radius:8px;
+    cursor:none;color:#ffd6ea;font-size:12px;padding:5px 10px;transition:background .2s}
+  .kw-page-btn:hover:not(:disabled){background:rgba(255,20,147,.25)}
+  .kw-page-btn:disabled{opacity:.4}
+  .kw-page-info{font-size:12px;color:#caa9bb}
 
   /* toggle */
   .sw{position:relative;display:inline-flex;align-items:center;gap:10px;cursor:none}
@@ -748,7 +766,12 @@ function renderKW(c){
       <button class="kw-suggest" type="button">✨ Suggest similar</button>
     </div>
     <div class="kw-suggestions"></div>
-    <div class="kw-list">Loading…</div>
+    <button class="kw-toggle" type="button"><span class="kw-chev">▸</span> Blocked words (<span class="kw-count">0</span>)</button>
+    <div class="kw-panel" hidden>
+      <input type="text" class="kw-search" placeholder="search blocked words…">
+      <div class="kw-list"></div>
+      <div class="kw-pager"></div>
+    </div>
     <div class="rr-divider"></div>
     <div class="opt"><label>Auto-mod enabled</label>
       <label class="sw"><input type="checkbox" class="kw-enabled" ${am.enabled?'checked':''}><span class="track"></span></label></div>
@@ -776,15 +799,43 @@ function renderKW(c){
   const actSel=pop.querySelector('.kw-action'), tw=pop.querySelector('.kw-tmins-wrap');
   const syncT=()=>{ tw.style.display = actSel.value==='timeout' ? '' : 'none'; };
   actSel.addEventListener('change',syncT); syncT();
+  kwPage=0; kwQuery='';
+  pop.querySelector('.kw-search').addEventListener('input',e=>{ kwQuery=e.target.value; kwPage=0; loadKWList(); });
   loadKWList();
 }
+let kwPage=0, kwQuery='';
+const KW_PER_PAGE=25;
 function loadKWList(){
-  const list=pop.querySelector('.kw-list'); if(!list)return;
-  const words=kwWords();
-  if(!words.length){ list.innerHTML='<div class="rr-empty">No blocked words yet.</div>'; return; }
-  list.innerHTML=words.map(w=>`<span class="kw-chip">${kwEsc(w)}<button class="kw-del" data-w="${kwEsc(w)}" title="Remove">✕</button></span>`).join('');
+  const panel=pop.querySelector('.kw-panel'); if(!panel)return;
+  const all=kwWords();
+  const cnt=pop.querySelector('.kw-count'); if(cnt) cnt.textContent=all.length;
+  const list=pop.querySelector('.kw-list'), pager=pop.querySelector('.kw-pager');
+  pager.innerHTML='';
+  if(!all.length){ list.innerHTML='<div class="rr-empty">No blocked words yet.</div>'; return; }
+  const q=kwQuery.trim().toLowerCase();
+  const filtered=q?all.filter(w=>w.toLowerCase().includes(q)):all;
+  if(!filtered.length){ list.innerHTML=`<div class="rr-empty">No words match “${kwEsc(q)}”.</div>`; return; }
+  const pages=Math.ceil(filtered.length/KW_PER_PAGE);
+  kwPage=Math.max(0, Math.min(kwPage, pages-1));
+  const start=kwPage*KW_PER_PAGE;
+  list.innerHTML=filtered.slice(start,start+KW_PER_PAGE)
+    .map(w=>`<span class="kw-chip">${kwEsc(w)}<button class="kw-del" data-w="${kwEsc(w)}" title="Remove">✕</button></span>`).join('');
+  if(pages>1){
+    pager.innerHTML=`<button class="kw-page-btn kw-prev" type="button" ${kwPage===0?'disabled':''}>‹ Prev</button>`
+      +`<span class="kw-page-info">${kwPage+1} / ${pages}</span>`
+      +`<button class="kw-page-btn kw-next" type="button" ${kwPage>=pages-1?'disabled':''}>Next ›</button>`;
+  }
 }
 pop.addEventListener('click', async e=>{
+  const tog=e.target.closest('.kw-toggle');
+  if(tog){
+    const panel=pop.querySelector('.kw-panel'), open=panel.hasAttribute('hidden');
+    if(open){ panel.removeAttribute('hidden'); tog.classList.add('open'); pop.querySelector('.kw-search').focus(); }
+    else { panel.setAttribute('hidden',''); tog.classList.remove('open'); }
+    return;
+  }
+  const prev=e.target.closest('.kw-prev'); if(prev){ kwPage--; loadKWList(); return; }
+  const next=e.target.closest('.kw-next'); if(next){ kwPage++; loadKWList(); return; }
   const add=e.target.closest('.kw-add');
   if(add){
     const inp=pop.querySelector('.kw-input'); const v=(inp.value||'').trim();
