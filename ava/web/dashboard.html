@@ -214,10 +214,10 @@
   .rr-mini:hover{background:rgba(255,20,147,.18);border-color:var(--pink)}
 
   /* keyword filter */
-  .kw-actions{display:flex;gap:8px;align-items:center;margin-top:2px}
-  .kw-actions .kw-add{flex:0 0 auto;margin:0}
-  .kw-suggest{background:rgba(255,20,147,.10);border:1px solid var(--pink);border-radius:8px;
-    cursor:none;color:#ffd6ea;font-size:12px;padding:7px 10px;transition:background .2s}
+  .kw-actions{display:flex;flex-direction:column;gap:8px;margin-top:2px}
+  .kw-actions .kw-add{margin:0}
+  .kw-suggest{width:100%;background:rgba(255,20,147,.10);border:1px solid var(--pink);border-radius:10px;
+    cursor:none;color:#ffd6ea;font-size:13px;padding:10px;transition:background .2s}
   .kw-suggest:hover{background:rgba(255,20,147,.22)}
   .kw-suggest:disabled{opacity:.6}
   .kw-suggestions{margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
